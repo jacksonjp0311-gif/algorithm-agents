@@ -9,6 +9,7 @@ keywords = ["algorithms", "agents", "research", "extraction"]
 categories = ["command-line-utilities", "science"]
 publish = false
 repository = "https://github.com/jacksonjp0311-gif/algorithm-agents"
+homepage = "https://github.com/jacksonjp0311-gif/algorithm-agents"
 
 [lib]
 name = "agent_system"
