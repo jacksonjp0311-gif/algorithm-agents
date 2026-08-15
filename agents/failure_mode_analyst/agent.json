@@ -1,0 +1,26 @@
+{
+  "id": "failure_mode_analyst",
+  "name": "Failure-Mode Analyst",
+  "version": "1.0.0",
+  "purpose": "Identify edge cases, instability, invalid inputs, and known limitations.",
+  "family": "analysis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "analyze_failures",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

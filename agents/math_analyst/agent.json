@@ -1,0 +1,28 @@
+{
+  "id": "math_analyst",
+  "name": "Math Analyst",
+  "version": "1.0.0",
+  "purpose": "Extract and normalize equations, variables, operators, recurrences, constraints, and update rules.",
+  "family": "analysis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "analyze_math",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [
+    "math_checker"
+  ],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

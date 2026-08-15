@@ -1,0 +1,26 @@
+{
+  "id": "domain_classifier",
+  "name": "Domain Classifier",
+  "version": "1.0.0",
+  "purpose": "Assign domains and tags.",
+  "family": "knowledge",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "classify_domain",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

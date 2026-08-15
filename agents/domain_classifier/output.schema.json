@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "required": [
+    "domain"
+  ],
+  "properties": {
+    "domain": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array"
+    }
+  }
+}

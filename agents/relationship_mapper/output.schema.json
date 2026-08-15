@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": [
+    "algorithms"
+  ],
+  "properties": {
+    "algorithms": {
+      "type": "array"
+    },
+    "research": {
+      "type": "array"
+    },
+    "projects": {
+      "type": "array"
+    },
+    "notes": {
+      "type": "array"
+    },
+    "labs": {
+      "type": "array"
+    }
+  }
+}

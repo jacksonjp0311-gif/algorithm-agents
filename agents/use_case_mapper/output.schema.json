@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": [
+    "known_uses",
+    "potential_uses"
+  ],
+  "properties": {
+    "known_uses": {
+      "type": "array"
+    },
+    "potential_uses": {
+      "type": "array"
+    },
+    "separated": {
+      "type": "boolean"
+    }
+  }
+}

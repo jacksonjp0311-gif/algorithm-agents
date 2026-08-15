@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": [
+    "motifs"
+  ],
+  "properties": {
+    "motifs": {
+      "type": "array"
+    },
+    "equivalence_claimed": {
+      "type": "boolean"
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

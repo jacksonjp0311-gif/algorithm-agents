@@ -1,0 +1,29 @@
+{
+  "id": "algorithm_extractor",
+  "name": "Algorithm Extractor",
+  "version": "1.0.0",
+  "purpose": "Extract explicit or reconstructable computational procedures from supplied technical material.",
+  "family": "analysis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "extract_algorithm",
+    "request_math_analysis",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [
+    "math_analyst"
+  ],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

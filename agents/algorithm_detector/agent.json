@@ -1,0 +1,28 @@
+{
+  "id": "algorithm_detector",
+  "name": "Algorithm Detector",
+  "version": "1.0.0",
+  "purpose": "Decide whether a source contains a computational procedure worth extracting.",
+  "family": "analysis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "detect_algorithm",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [
+    "algorithm_extractor"
+  ],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

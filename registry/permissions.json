@@ -1,0 +1,24 @@
+{
+  "publication_allowed": false,
+  "live_fetch_enabled": false,
+  "allowed_hosts": [],
+  "denied_hosts": [
+    "localhost"
+  ],
+  "max_fetch_bytes": 250000,
+  "fetch_timeout_seconds": 8,
+  "user_agent": "Algorithm-Agents/1.0 (local research extractor)",
+  "code_languages": [
+    "python"
+  ],
+  "code_timeout_seconds": 3,
+  "code_output_limit": 4096,
+  "globally_denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell",
+    "write_file",
+    "run_shell",
+    "approve_extraction"
+  ]
+}

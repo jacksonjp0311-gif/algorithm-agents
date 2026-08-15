@@ -1,0 +1,28 @@
+{
+  "id": "code_analyst",
+  "name": "Code Analyst",
+  "version": "1.0.0",
+  "purpose": "Analyze supplied implementation material for structure, state, and data flow.",
+  "family": "analysis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "analyze_code",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [
+    "code_verifier"
+  ],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

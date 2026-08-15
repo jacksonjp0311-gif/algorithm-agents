@@ -1,0 +1,26 @@
+{
+  "id": "summarizer",
+  "name": "Summarizer",
+  "version": "1.0.0",
+  "purpose": "Produce the human-facing explanation used in compact cards and detailed archive views.",
+  "family": "synthesis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "summarize_candidate",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

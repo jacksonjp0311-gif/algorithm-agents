@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "extraction": {
+      "type": "object"
+    },
+    "origin": {
+      "type": "string"
+    },
+    "ambiguous": {
+      "type": "boolean"
+    },
+    "extracted": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}

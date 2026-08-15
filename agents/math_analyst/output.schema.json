@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "required": [
+    "equations"
+  ],
+  "properties": {
+    "equations": {
+      "type": "array"
+    },
+    "variables": {
+      "type": "array"
+    },
+    "operators": {
+      "type": "array"
+    },
+    "recurrences": {
+      "type": "array"
+    },
+    "constraints": {
+      "type": "array"
+    },
+    "assumptions": {
+      "type": "array"
+    },
+    "objective_functions": {
+      "type": "array"
+    },
+    "update_rules": {
+      "type": "array"
+    },
+    "ambiguous": {
+      "type": "boolean"
+    }
+  }
+}

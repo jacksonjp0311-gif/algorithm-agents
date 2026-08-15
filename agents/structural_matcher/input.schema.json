@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "properties": {
+    "artifact_id": {
+      "type": "string"
+    },
+    "locator": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "source_text": {
+      "type": "string"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "extraction": {
+      "type": "object"
+    },
+    "claims": {
+      "type": "array"
+    },
+    "language": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "max_depth": {
+      "type": "integer"
+    },
+    "normalized": {
+      "type": "object"
+    }
+  }
+}

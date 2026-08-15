@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": [
+    "code",
+    "label"
+  ],
+  "properties": {
+    "language": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string"
+    }
+  }
+}

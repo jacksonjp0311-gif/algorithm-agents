@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": [
+    "proposed_tests"
+  ],
+  "properties": {
+    "proposed_tests": {
+      "type": "array"
+    },
+    "validation_status": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

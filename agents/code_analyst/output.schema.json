@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "required": [
+    "algorithm_structure"
+  ],
+  "properties": {
+    "algorithm_structure": {
+      "type": "string"
+    },
+    "state": {
+      "type": "array"
+    },
+    "data_flow": {
+      "type": "array"
+    },
+    "important_functions": {
+      "type": "array"
+    },
+    "implementation_constraints": {
+      "type": "array"
+    },
+    "complexity_clues": {
+      "type": "array"
+    },
+    "language": {
+      "type": "string"
+    }
+  }
+}

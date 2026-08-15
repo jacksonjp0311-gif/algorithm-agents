@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": [
+    "verdict"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "YES",
+        "NO",
+        "UNCERTAIN"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    }
+  }
+}

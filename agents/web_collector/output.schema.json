@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "required": [
+    "locator"
+  ],
+  "properties": {
+    "locator": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "blocked": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "resolved": {
+      "type": "string"
+    },
+    "bytes": {
+      "type": "integer"
+    }
+  }
+}

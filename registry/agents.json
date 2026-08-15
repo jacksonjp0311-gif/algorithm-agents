@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "agents": [
+    "source_scout",
+    "web_collector",
+    "paper_analyst",
+    "repository_scout",
+    "citation_walker",
+    "algorithm_detector",
+    "algorithm_extractor",
+    "math_analyst",
+    "code_analyst",
+    "complexity_analyst",
+    "assumption_analyst",
+    "failure_mode_analyst",
+    "provenance_checker",
+    "cross_source_verifier",
+    "math_checker",
+    "code_verifier",
+    "hallucination_challenger",
+    "deduplicator",
+    "relationship_mapper",
+    "structural_matcher",
+    "domain_classifier",
+    "use_case_mapper",
+    "normalizer",
+    "summarizer",
+    "code_translator",
+    "experiment_designer"
+  ]
+}

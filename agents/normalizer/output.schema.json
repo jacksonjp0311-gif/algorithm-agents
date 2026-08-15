@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "required": [
+    "normalized"
+  ],
+  "properties": {
+    "normalized": {
+      "type": "object"
+    }
+  }
+}

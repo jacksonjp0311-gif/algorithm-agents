@@ -1,0 +1,28 @@
+{
+  "id": "paper_analyst",
+  "name": "Paper Analyst",
+  "version": "1.0.0",
+  "purpose": "Inspect supplied papers or research documents without mirroring entire documents.",
+  "family": "acquisition",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "inspect_document",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [
+    "algorithm_detector"
+  ],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

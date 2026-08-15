@@ -1,0 +1,26 @@
+{
+  "id": "cross_source_verifier",
+  "name": "Cross-Source Verifier",
+  "version": "1.0.0",
+  "purpose": "Check important claims against additional independent sources without manufacturing certainty.",
+  "family": "verification",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "verify_provenance",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "required": [
+    "title"
+  ],
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "authors": {
+      "type": "array"
+    },
+    "abstract": {
+      "type": "string"
+    },
+    "sections": {
+      "type": "array"
+    },
+    "equations": {
+      "type": "array"
+    },
+    "algorithms": {
+      "type": "array"
+    },
+    "references": {
+      "type": "array"
+    },
+    "methodology_clues": {
+      "type": "array"
+    },
+    "origin": {
+      "type": "string"
+    }
+  }
+}

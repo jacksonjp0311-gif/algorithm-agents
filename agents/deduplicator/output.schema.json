@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": [
+    "verdict"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "NEW",
+        "DUPLICATE",
+        "POSSIBLE_DUPLICATE",
+        "VARIANT"
+      ]
+    },
+    "matches": {
+      "type": "array"
+    },
+    "candidate": {
+      "type": "object"
+    }
+  }
+}

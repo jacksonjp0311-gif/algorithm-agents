@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "required": [
+    "challenges"
+  ],
+  "properties": {
+    "challenges": {
+      "type": "array"
+    },
+    "challenged": {
+      "type": "boolean"
+    }
+  }
+}

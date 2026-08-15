@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "required": [
+    "result"
+  ],
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNCERTAIN",
+        "NOT_TESTED"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "failed": {
+      "type": "array"
+    },
+    "checked": {
+      "type": "string"
+    },
+    "equations": {
+      "type": "array"
+    }
+  }
+}

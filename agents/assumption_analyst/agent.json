@@ -1,0 +1,26 @@
+{
+  "id": "assumption_analyst",
+  "name": "Assumption Analyst",
+  "version": "1.0.0",
+  "purpose": "Extract assumptions required for the method to work.",
+  "family": "analysis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "analyze_assumptions",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

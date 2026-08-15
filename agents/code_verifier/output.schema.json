@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "required": [
+    "result"
+  ],
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNCERTAIN",
+        "NOT_TESTED"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "stdout": {
+      "type": "string"
+    },
+    "stderr": {
+      "type": "string"
+    }
+  }
+}

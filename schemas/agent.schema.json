@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "purpose",
+    "family",
+    "allowed_tools",
+    "denied_tools"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "family": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "array"
+    },
+    "outputs": {
+      "type": "array"
+    },
+    "allowed_tools": {
+      "type": "array"
+    },
+    "denied_tools": {
+      "type": "array"
+    },
+    "can_message": {
+      "type": "array"
+    },
+    "timeout_seconds": {
+      "type": "integer"
+    },
+    "max_retries": {
+      "type": "integer"
+    },
+    "enabled": {
+      "type": "boolean"
+    }
+  }
+}

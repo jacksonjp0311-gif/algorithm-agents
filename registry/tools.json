@@ -1,0 +1,411 @@
+{
+  "schema_version": "1.0.0",
+  "tools": [
+    {
+      "id": "list_agents",
+      "description": "List registered agents",
+      "session_required": false,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "describe_agent",
+      "description": "Describe one agent",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": [
+          "agent_id"
+        ]
+      }
+    },
+    {
+      "id": "list_tools",
+      "description": "List tools",
+      "session_required": false,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "describe_tool",
+      "description": "Describe one tool",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": [
+          "tool_id"
+        ]
+      }
+    },
+    {
+      "id": "start_session",
+      "description": "Create a research session",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": [
+          "objective"
+        ]
+      }
+    },
+    {
+      "id": "get_session",
+      "description": "Inspect a session",
+      "session_required": true,
+      "args": {
+        "type": "object",
+        "required": [
+          "session_id"
+        ]
+      }
+    },
+    {
+      "id": "list_sessions",
+      "description": "List sessions",
+      "session_required": false,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "run_agent",
+      "description": "Run a registered agent",
+      "session_required": true,
+      "args": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "agent_id"
+        ]
+      }
+    },
+    {
+      "id": "get_agent_status",
+      "description": "Get run status",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": [
+          "run_id"
+        ]
+      }
+    },
+    {
+      "id": "get_agent_result",
+      "description": "Get run result",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": [
+          "run_id"
+        ]
+      }
+    },
+    {
+      "id": "send_agent_message",
+      "description": "Send a typed inter-agent message",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "get_agent_messages",
+      "description": "List session messages",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "submit_review_candidate",
+      "description": "Submit a private extraction candidate",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "pause_session",
+      "description": "Pause a session",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "resume_session",
+      "description": "Resume a session",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "stop_session",
+      "description": "Stop a session",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "get_session_events",
+      "description": "List session events",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "get_session_receipt",
+      "description": "Write and return the session receipt",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "get_overview",
+      "description": "Runtime overview counts",
+      "session_required": false,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "list_artifacts",
+      "description": "List artifacts",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "get_artifact",
+      "description": "Read an artifact",
+      "session_required": false,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "list_runs",
+      "description": "List runs",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "submit_artifact",
+      "description": "Internal artifact write used by agents",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "request_math_analysis",
+      "description": "Ask math_analyst for analysis",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "search_sources",
+      "description": "Supervisor alias `search_sources`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "retrieve_source",
+      "description": "Supervisor alias `retrieve_source`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "inspect_document",
+      "description": "Supervisor alias `inspect_document`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "inspect_repository",
+      "description": "Supervisor alias `inspect_repository`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "detect_algorithm",
+      "description": "Supervisor alias `detect_algorithm`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "extract_algorithm",
+      "description": "Supervisor alias `extract_algorithm`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "analyze_math",
+      "description": "Supervisor alias `analyze_math`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "analyze_code",
+      "description": "Supervisor alias `analyze_code`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "analyze_complexity",
+      "description": "Supervisor alias `analyze_complexity`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "analyze_assumptions",
+      "description": "Supervisor alias `analyze_assumptions`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "analyze_failures",
+      "description": "Supervisor alias `analyze_failures`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "verify_provenance",
+      "description": "Supervisor alias `verify_provenance`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "verify_math",
+      "description": "Supervisor alias `verify_math`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "verify_code",
+      "description": "Supervisor alias `verify_code`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "challenge_claims",
+      "description": "Supervisor alias `challenge_claims`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "find_duplicates",
+      "description": "Supervisor alias `find_duplicates`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "find_relationships",
+      "description": "Supervisor alias `find_relationships`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "find_structural_matches",
+      "description": "Supervisor alias `find_structural_matches`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "classify_domain",
+      "description": "Supervisor alias `classify_domain`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "map_use_cases",
+      "description": "Supervisor alias `map_use_cases`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "normalize_candidate",
+      "description": "Supervisor alias `normalize_candidate`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "summarize_candidate",
+      "description": "Supervisor alias `summarize_candidate`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "generate_reference_code",
+      "description": "Supervisor alias `generate_reference_code`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "design_experiment",
+      "description": "Supervisor alias `design_experiment`",
+      "session_required": true,
+      "args": {
+        "type": "object"
+      }
+    }
+  ]
+}

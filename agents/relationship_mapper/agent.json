@@ -1,0 +1,26 @@
+{
+  "id": "relationship_mapper",
+  "name": "Relationship Mapper",
+  "version": "1.0.0",
+  "purpose": "Find related algorithms, research, projects, notes, and labs.",
+  "family": "knowledge",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "find_relationships",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

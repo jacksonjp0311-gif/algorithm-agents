@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": [
+    "card"
+  ],
+  "properties": {
+    "card": {
+      "type": "string"
+    },
+    "detail": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    }
+  }
+}

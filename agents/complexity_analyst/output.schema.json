@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "required": [
+    "origin"
+  ],
+  "properties": {
+    "time_complexity": {
+      "type": "string"
+    },
+    "space_complexity": {
+      "type": "string"
+    },
+    "scaling": {
+      "type": "string"
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "SOURCE_STATED",
+        "DERIVED",
+        "UNKNOWN"
+      ]
+    }
+  }
+}

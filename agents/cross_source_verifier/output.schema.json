@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": [
+    "certainty"
+  ],
+  "properties": {
+    "independent_sources": {
+      "type": "array"
+    },
+    "certainty": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

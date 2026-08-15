@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "required": [
+    "repository"
+  ],
+  "properties": {
+    "repository": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "commit_ref": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    }
+  }
+}

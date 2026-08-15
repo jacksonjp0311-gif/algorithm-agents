@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": [
+    "citations"
+  ],
+  "properties": {
+    "citations": {
+      "type": "array"
+    },
+    "max_depth": {
+      "type": "integer"
+    },
+    "bounded": {
+      "type": "boolean"
+    }
+  }
+}

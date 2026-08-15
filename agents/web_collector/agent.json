@@ -1,0 +1,26 @@
+{
+  "id": "web_collector",
+  "name": "Web Collector",
+  "version": "1.0.0",
+  "purpose": "Retrieve permitted public website material for analysis.",
+  "family": "acquisition",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "retrieve_source",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

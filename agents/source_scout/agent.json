@@ -1,0 +1,28 @@
+{
+  "id": "source_scout",
+  "name": "Source Scout",
+  "version": "1.0.0",
+  "purpose": "Find potentially relevant public technical sources according to the session objective.",
+  "family": "acquisition",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "search_sources",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [
+    "math_analyst"
+  ],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

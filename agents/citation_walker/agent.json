@@ -1,0 +1,28 @@
+{
+  "id": "citation_walker",
+  "name": "Citation Walker",
+  "version": "1.0.0",
+  "purpose": "Follow relevant citations in a bounded search.",
+  "family": "acquisition",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "search_sources",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [
+    "source_scout"
+  ],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

@@ -1,0 +1,26 @@
+{
+  "id": "normalizer",
+  "name": "Normalizer",
+  "version": "1.0.0",
+  "purpose": "Convert heterogeneous agent outputs into the canonical archive candidate schema.",
+  "family": "synthesis",
+  "inputs": [
+    "source_document"
+  ],
+  "outputs": [
+    "artifact"
+  ],
+  "allowed_tools": [
+    "normalize_candidate",
+    "submit_artifact"
+  ],
+  "denied_tools": [
+    "publish_algorithm",
+    "modify_canonical_archive",
+    "unrestricted_shell"
+  ],
+  "can_message": [],
+  "timeout_seconds": 120,
+  "max_retries": 2,
+  "enabled": true
+}

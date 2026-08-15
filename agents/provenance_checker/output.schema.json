@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": [
+    "claims"
+  ],
+  "properties": {
+    "claims": {
+      "type": "array"
+    },
+    "ambiguous": {
+      "type": "boolean"
+    },
+    "unsupported": {
+      "type": "integer"
+    }
+  }
+}

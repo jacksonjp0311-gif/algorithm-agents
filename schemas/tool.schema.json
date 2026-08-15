@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "required": [
+    "id",
+    "description"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "session_required": {
+      "type": "boolean"
+    },
+    "args": {
+      "type": "object"
+    }
+  }
+}
