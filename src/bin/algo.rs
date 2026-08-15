@@ -68,6 +68,13 @@ enum Command {
     Demo {
         name: String,
     },
+    /// Open the local archive card UI
+    Ui {
+        #[arg(long, default_value = "127.0.0.1:8791")]
+        bind: String,
+        #[arg(long)]
+        no_open: bool,
+    },
     Tool {
         name: String,
         #[arg(long)]
@@ -207,6 +214,16 @@ async fn main() -> anyhow::Result<()> {
             if report.get("verdict").and_then(|v| v.as_str()) != Some("PASS") {
                 std::process::exit(1);
             }
+        }
+        Command::Ui { bind, no_open } => {
+            let addr: std::net::SocketAddr = bind.parse()?;
+            let url = format!("http://{addr}/");
+            println!("Algorithm archive UI → {url}");
+            println!("Cards read from {}", runtime.data_dir.join("archive").display());
+            if !no_open {
+                agent_system::ui::open_browser(&url);
+            }
+            agent_system::ui::serve(runtime.root.clone(), archive, addr).await?;
         }
         Command::Demo { name } => {
             let value = match name.as_str() {

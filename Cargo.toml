@@ -21,6 +21,7 @@ path = "src/bin/algo.rs"
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
+axum = "0.8"
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "http2"] }
 serde = { version = "1", features = ["derive"] }
@@ -30,6 +31,7 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "time"] 
 thiserror = "2"
 time = { version = "=0.3.41", features = ["formatting", "serde"] }
 tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 

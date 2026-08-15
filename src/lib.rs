@@ -17,6 +17,7 @@ pub mod schema;
 pub mod smoke;
 pub mod supervisor;
 pub mod tools;
+pub mod ui;
 
 pub use archive::FileArchive;
 pub use error::AgentError;

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#041018">
+  <title>Algorithm Archive</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="site-strip">Algorithm Agents</div>
+<header class="site-header">
+  <div class="nav-shell">
+    <a class="brand-link" href="/"><span class="brand-mark"></span><span class="brand-wordmark"><strong>Algorithm</strong><span>Agents</span></span></a>
+    <nav class="site-nav" aria-label="Sections">
+      <a href="#queue">Queue</a>
+      <a href="#archive">Archive</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow">Archive</p>
+      <h1 class="section-title">Algorithm Archive</h1>
+      <p class="lede">Harvested procedures as cards. Pending stays in the queue until you accept it.</p>
+      <div class="archive-metrics" id="archive-metrics"></div>
+    </div>
+  </section>
+  <section class="section-tight">
+    <div class="container">
+      <div class="archive-chips" id="archive-chips" aria-label="Domains"></div>
+      <div class="archive-toolbar">
+        <input id="archive-search" type="search" placeholder="Search title, domain, tags, source…">
+        <select id="archive-sort">
+          <option value="domain">Domain</option>
+          <option value="title">Title</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
+    </div>
+  </section>
+  <section class="section" id="queue">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Queue</p>
+        <h2 class="section-title">Awaiting review</h2>
+      </div>
+      <div id="queue-grid" class="archive-grid"></div>
+    </div>
+  </section>
+  <section class="section" id="archive">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Accepted</p>
+        <h2 class="section-title">In the archive</h2>
+      </div>
+      <div id="archive-grid" class="archive-grid"></div>
+    </div>
+  </section>
+</main>
+<dialog id="archive-hud" class="archive-hud" aria-labelledby="hud-title">
+  <button type="button" class="dialog-close" id="hud-close" aria-label="Close">×</button>
+  <div id="hud-body"></div>
+</dialog>
+<footer class="site-footer"><div class="container"><span>Local archive. Nothing publishes itself.</span></div></footer>
+<script src="/js/app.js"></script>
+</body>
+</html>

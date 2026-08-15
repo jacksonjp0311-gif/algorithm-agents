@@ -62,6 +62,14 @@ cargo run --bin algo -- --live scrape "https://en.wikipedia.org/wiki/Dijkstra%27
 cargo run --bin algo -- archive show CAND-0002
 ```
 
+Open the card UI (same archive cards as the Jackson site):
+
+```powershell
+cargo run --bin algo -- ui
+```
+
+That starts a local page at http://127.0.0.1:8791 — glowing cards, domain chips, search, and Accept / Reject on the queue. Nothing is public. Close the terminal to stop it.
+
 A passing smoke run means all 26 agents compiled against their schemas, executed, and the failure path still fails.
 
 ---
@@ -107,6 +115,7 @@ Nothing in that pipeline publishes to a website or a remote API. The archive is 
 | `algo archive show <id>` | Full queued candidate |
 | `algo archive accept <id>` | Promote into the local archive |
 | `algo archive reject <id>` | Mark rejected |
+| `algo ui` | Local card UI at http://127.0.0.1:8791 |
 
 ### Runtime
 

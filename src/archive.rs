@@ -65,6 +65,42 @@ impl FileArchive {
         self.published.lock().await.items.clone()
     }
 
+    pub async fn reload(&self) -> Result<(), AgentError> {
+        let queue = read_json(&self.dir.join("queue.json"))
+            .await?
+            .unwrap_or(QueueFile {
+                next: 1,
+                items: Vec::new(),
+            });
+        let published = read_json(&self.dir.join("algorithms.json"))
+            .await?
+            .unwrap_or_default();
+        *self.queue.lock().await = queue;
+        *self.published.lock().await = published;
+        Ok(())
+    }
+
+    pub async fn catalog(&self) -> Result<Catalog, AgentError> {
+        self.reload().await?;
+        let published = self.published.lock().await.items.clone();
+        let mut accepted = Vec::new();
+        for item in published {
+            let extraction = read_json(&self.dir.join("accepted").join(format!("{}.json", item.id)))
+                .await?
+                .unwrap_or_else(|| serde_json::to_value(&item).unwrap_or(Value::Null));
+            accepted.push(catalog_from_published(item, extraction));
+        }
+        let queue = self
+            .queue
+            .lock()
+            .await
+            .items
+            .iter()
+            .map(catalog_from_queued)
+            .collect();
+        Ok(Catalog { accepted, queue })
+    }
+
     pub async fn get_candidate(&self, id: &str) -> Result<QueuedCandidate, AgentError> {
         self.queue
             .lock()
@@ -77,6 +113,7 @@ impl FileArchive {
     }
 
     pub async fn accept(&self, id: &str) -> Result<PublishedAlgorithm, AgentError> {
+        self.reload().await?;
         let mut queue = self.queue.lock().await;
         let index = queue
             .items
@@ -112,6 +149,7 @@ impl FileArchive {
     }
 
     pub async fn reject(&self, id: &str, reason: &str) -> Result<QueuedCandidate, AgentError> {
+        self.reload().await?;
         let mut queue = self.queue.lock().await;
         let item = queue
             .items
@@ -160,6 +198,74 @@ impl ArchiveHost for FileArchive {
             candidate_id: item.candidate_id,
             review_state: item.review_state,
         })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogItem {
+    pub id: String,
+    pub archive_id: String,
+    pub status: String,
+    pub title: String,
+    pub short_name: String,
+    pub slug: String,
+    pub domain: String,
+    pub summary: String,
+    pub core_idea: String,
+    pub tags: Vec<String>,
+    pub created_at: String,
+    pub extraction: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Catalog {
+    pub accepted: Vec<CatalogItem>,
+    pub queue: Vec<CatalogItem>,
+}
+
+fn catalog_from_published(item: PublishedAlgorithm, extraction: Value) -> CatalogItem {
+    CatalogItem {
+        id: item.id,
+        archive_id: item.archive_id,
+        status: "accepted".into(),
+        title: item.title,
+        short_name: item.short_name,
+        slug: item.slug,
+        domain: item.domain,
+        summary: item.summary,
+        core_idea: item.core_idea,
+        tags: item.tags,
+        created_at: String::new(),
+        extraction,
+    }
+}
+
+fn catalog_from_queued(item: &QueuedCandidate) -> CatalogItem {
+    let n = &item.normalized;
+    CatalogItem {
+        id: item.candidate_id.clone(),
+        archive_id: item.candidate_id.clone(),
+        status: item.review_state.to_ascii_lowercase(),
+        title: string_field(n, "title").unwrap_or_else(|| item.candidate_id.clone()),
+        short_name: string_field(n, "short_name").unwrap_or_default(),
+        slug: slugify(&string_field(n, "title").unwrap_or_else(|| item.candidate_id.clone())),
+        domain: string_field(n, "domain").unwrap_or_default(),
+        summary: string_field(n, "summary")
+            .or_else(|| string_field(n, "plain_language_explanation"))
+            .unwrap_or_default(),
+        core_idea: string_field(n, "core_idea").unwrap_or_default(),
+        tags: n
+            .get("tags")
+            .and_then(|v| v.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        created_at: item.created_at.clone(),
+        extraction: n.clone(),
     }
 }
 
