@@ -59,6 +59,7 @@ Scrape a public page (explicit opt-in):
 
 ```powershell
 cargo run --bin algo -- --live scrape "https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm"
+cargo run --bin algo -- --live hunt "physics" --limit 6
 cargo run --bin algo -- archive show CAND-0002
 ```
 
@@ -111,6 +112,7 @@ Nothing in that pipeline publishes to a website or a remote API. The archive is 
 | `algo find "<query>"` | Search fixtures, `sources/`, and accepted archive entries |
 | `algo harvest "<objective>"` | Scout → extract → save up to `--limit` candidates (default 4) |
 | `algo scrape <locator>` | Collect one fixture, file, or URL and save a candidate |
+| `algo --live hunt "physics"` | Search arXiv physics + Wikipedia and extract candidates |
 | `algo archive list` | Queue + accepted algorithms |
 | `algo archive show <id>` | Full queued candidate |
 | `algo archive accept <id>` | Promote into the local archive |

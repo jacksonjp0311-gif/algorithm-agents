@@ -197,7 +197,21 @@ fn decode_entities(text: &str) -> String {
 fn first_heading(text: &str) -> Option<String> {
     for line in text.lines() {
         let trimmed = line.trim().trim_start_matches('#').trim();
-        if trimmed.len() > 3 && trimmed.len() < 160 {
+        if trimmed.starts_with("{{")
+            || trimmed.starts_with("|")
+            || trimmed.starts_with("}")
+            || trimmed.starts_with("[[File:")
+            || trimmed.starts_with("[[Image:")
+        {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("'''") {
+            let name = rest.split("'''").next().unwrap_or(rest).trim();
+            if name.len() > 2 && name.len() < 160 {
+                return Some(name.to_owned());
+            }
+        }
+        if trimmed.len() > 3 && trimmed.len() < 160 && !trimmed.starts_with('{') {
             return Some(trimmed.to_owned());
         }
     }

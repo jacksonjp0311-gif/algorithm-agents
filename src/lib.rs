@@ -5,6 +5,7 @@ pub mod collect;
 pub mod demo;
 pub mod error;
 pub mod fetch;
+pub mod hunt;
 pub mod host;
 pub mod parse;
 pub mod permissions;

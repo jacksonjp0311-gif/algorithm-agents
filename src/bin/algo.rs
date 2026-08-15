@@ -46,6 +46,21 @@ enum Command {
         #[arg(long, default_value = "Extract reconstructable algorithms from this source")]
         objective: String,
     },
+    /// Search arXiv / the live web and extract algorithm candidates
+    Hunt {
+        /// Topic to hunt, e.g. "physics" or "monte carlo"
+        query: String,
+        #[arg(long, default_value_t = true)]
+        arxiv: bool,
+        #[arg(long, default_value_t = true)]
+        web: bool,
+        #[arg(long, default_value_t = 6)]
+        limit: usize,
+        #[arg(long)]
+        no_arxiv: bool,
+        #[arg(long)]
+        no_web: bool,
+    },
     #[command(subcommand)]
     Archive(ArchiveCmd),
     #[command(subcommand)]
@@ -140,7 +155,32 @@ async fn main() -> anyhow::Result<()> {
             print_json(pipeline::harvest(&runtime, &objective, limit).await?)
         }
         Command::Scrape { locator, objective } => {
+            runtime.permissions.fetch_timeout_seconds = runtime.permissions.fetch_timeout_seconds.max(20);
+            runtime.permissions.max_fetch_bytes = runtime.permissions.max_fetch_bytes.max(1_200_000);
             print_json(pipeline::scrape(&runtime, &locator, &objective).await?)
+        }
+        Command::Hunt {
+            query,
+            arxiv,
+            web,
+            limit,
+            no_arxiv,
+            no_web,
+        } => {
+            runtime.permissions.fetch_timeout_seconds = runtime.permissions.fetch_timeout_seconds.max(20);
+            runtime.permissions.max_fetch_bytes = runtime.permissions.max_fetch_bytes.max(1_200_000);
+            print_json(
+                agent_system::hunt::hunt(
+                    &runtime,
+                    agent_system::hunt::HuntSpec {
+                        query,
+                        arxiv: arxiv && !no_arxiv,
+                        web: web && !no_web,
+                        limit,
+                    },
+                )
+                .await?,
+            )
         }
         Command::Archive(ArchiveCmd::List) => {
             let queue = archive.list_queue().await;
