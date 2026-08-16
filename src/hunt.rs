@@ -244,7 +244,7 @@ fn decode_html(value: &str) -> String {
         .replace("</span>", "")
 }
 
-fn urlencoding(value: &str) -> String {
+pub fn urlencoding(value: &str) -> String {
     let mut out = String::new();
     for ch in value.chars() {
         match ch {

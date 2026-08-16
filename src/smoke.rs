@@ -149,8 +149,41 @@ async fn smoke_one(
     }
 }
 
+pub async fn smoke_process(runtime: &AgentRuntime) -> Result<Value, AgentError> {
+    let agents = smoke_all(runtime, None).await?;
+    let harvest = crate::pipeline::harvest(runtime, "shortest path", 1).await?;
+    let demo = crate::demo::demo_shortest_path(runtime).await?;
+    let harvest_ok = harvest
+        .pointer("/harvested/0/detect/verdict")
+        .and_then(|v| v.as_str())
+        == Some("YES")
+        || harvest
+            .pointer("/harvested/0/candidate/review_state")
+            .and_then(|v| v.as_str())
+            == Some("PENDING");
+    let demo_ok = demo.get("result").and_then(|v| v.as_str()) == Some("PASS")
+        || demo
+            .pointer("/candidate/review_state")
+            .and_then(|v| v.as_str())
+            == Some("PENDING")
+        || demo.pointer("/candidate/blocked").and_then(|v| v.as_bool()) == Some(true);
+    let agents_ok = agents.get("verdict").and_then(|v| v.as_str()) == Some("PASS");
+    let verdict = if agents_ok && harvest_ok {
+        "PASS"
+    } else {
+        "FAIL"
+    };
+    Ok(json!({
+        "banner": "ALGORITHM AGENTS / PROCESS COMPILER",
+        "agents": agents,
+        "harvest_ok": harvest_ok,
+        "demo_ok": demo_ok,
+        "verdict": verdict
+    }))
+}
+
 pub fn format_smoke_report(report: &Value) -> String {
-    let mut out = String::from("JACKSON AGENT SYSTEM / SMOKE COMPILER\n=====================================\n\n");
+    let mut out = String::from("ALGORITHM AGENTS / SMOKE COMPILER\n=================================\n\n");
     if let Some(results) = report.get("results").and_then(|v| v.as_array()) {
         for item in results {
             let id = item.get("agent").and_then(|v| v.as_str()).unwrap_or("?");

@@ -129,6 +129,227 @@ fn visit(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), AgentError> {
     Ok(())
 }
 
+pub fn canonical_fetch_url(locator: &str) -> String {
+    if let Some(id) = arxiv_id(locator) {
+        return format!("https://export.arxiv.org/api/query?id_list={id}");
+    }
+    if let Some(title) = wikipedia_title(locator) {
+        return format!(
+            "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&utf8=1&titles={}",
+            urlencoding(&title)
+        );
+    }
+    locator.to_owned()
+}
+
+pub fn normalize_source_text(locator: &str, raw: &str) -> String {
+    if raw.contains("<feed") && raw.contains("<entry>") {
+        return atom_to_labeled(raw, locator);
+    }
+    if raw.contains("\"query\"") && raw.contains("\"extract\"") {
+        return wikipedia_json_to_labeled(raw, locator);
+    }
+    if looks_like_html(raw) {
+        return crate::parse::clean_unstructured(&crate::parse::strip_markup(raw));
+    }
+    if raw.contains("{{") || raw.contains("'''") {
+        return crate::parse::clean_wikitext(raw);
+    }
+    crate::parse::clean_unstructured(raw)
+}
+
+pub fn arxiv_id(locator: &str) -> Option<String> {
+    let lower = locator.to_ascii_lowercase();
+    let marker = if let Some(rest) = lower.split("/abs/").nth(1) {
+        rest
+    } else if let Some(rest) = lower.split("/pdf/").nth(1) {
+        rest
+    } else if let Some(rest) = lower.split("id_list=").nth(1) {
+        rest
+    } else {
+        return None;
+    };
+    if !locator.to_ascii_lowercase().contains("arxiv.org") && !locator.contains("id_list=") {
+        return None;
+    }
+    let id = marker
+        .split(['?', '#', '&'])
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(".pdf");
+    let id = id
+        .rsplit_once('v')
+        .filter(|(_, ver)| ver.chars().all(|ch| ch.is_ascii_digit()))
+        .map(|(head, _)| head)
+        .unwrap_or(id);
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_owned())
+    }
+}
+
+pub fn wikipedia_title(locator: &str) -> Option<String> {
+    let lower = locator.to_ascii_lowercase();
+    if !lower.contains("wikipedia.org") {
+        return None;
+    }
+    if let Some(rest) = locator.split("title=").nth(1) {
+        let title = rest.split('&').next().unwrap_or(rest);
+        return Some(decode_url(title).replace('_', " "));
+    }
+    if let Some(rest) = locator.split("/wiki/").nth(1) {
+        let title = rest.split(['?', '#']).next().unwrap_or(rest);
+        return Some(decode_url(title).replace('_', " "));
+    }
+    None
+}
+
+fn atom_to_labeled(xml: &str, locator: &str) -> String {
+    let block = xml
+        .split("<entry>")
+        .nth(1)
+        .and_then(|chunk| chunk.split("</entry>").next())
+        .unwrap_or(xml);
+    let title = xml_tag(block, "title");
+    let summary = xml_tag(block, "summary");
+    let published = xml_tag(block, "published");
+    let year = published.get(..4).unwrap_or("").to_owned();
+    let authors: Vec<String> = block
+        .split("<author>")
+        .skip(1)
+        .filter_map(|chunk| {
+            let name = xml_tag(chunk, "name");
+            if name.is_empty() {
+                None
+            } else {
+                Some(name)
+            }
+        })
+        .collect();
+    let abs = arxiv_id(locator)
+        .or_else(|| arxiv_id(&xml_tag(block, "id")))
+        .map(|id| format!("https://arxiv.org/abs/{id}"))
+        .unwrap_or_else(|| locator.to_owned());
+    let hay = format!("{title} {summary}").to_ascii_lowercase();
+    let algorithm = if hay.contains("algorithm")
+        || hay.contains("monte carlo")
+        || hay.contains("method")
+        || hay.contains("procedure")
+    {
+        "yes"
+    } else {
+        "uncertain"
+    };
+    format!(
+        "TITLE: {title}\nAUTHORS:\n{}\nYEAR: {year}\nTYPE: paper\nURL: {abs}\nDOMAIN: Computational Science\nABSTRACT: {summary}\nALGORITHM: {algorithm}\nAMBIGUOUS: {}\n",
+        authors.iter().map(|name| format!("- {name}")).collect::<Vec<_>>().join("\n"),
+        if algorithm == "yes" { "no" } else { "yes" }
+    )
+}
+
+fn wikipedia_json_to_labeled(raw: &str, locator: &str) -> String {
+    let parsed: serde_json::Value = serde_json::from_str(raw).unwrap_or(serde_json::json!({}));
+    let pages = parsed
+        .pointer("/query/pages")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let page = pages.values().next();
+    let fallback_title = wikipedia_title(locator).unwrap_or_else(|| "Untitled".into());
+    let title = page
+        .and_then(|v| v.get("title"))
+        .and_then(|v| v.as_str())
+        .unwrap_or(fallback_title.as_str())
+        .to_owned();
+    let extract = page
+        .and_then(|v| v.get("extract"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_owned();
+    let url = wikipedia_title(locator)
+        .map(|name| format!("https://en.wikipedia.org/wiki/{}", name.replace(' ', "_")))
+        .unwrap_or_else(|| locator.to_owned());
+    let hay = format!("{title} {extract}").to_ascii_lowercase();
+    let algorithm = if hay.contains("algorithm")
+        || hay.contains("procedure")
+        || hay.contains("monte carlo")
+    {
+        "yes"
+    } else {
+        "uncertain"
+    };
+    format!(
+        "TITLE: {title}\nTYPE: encyclopedia\nURL: {url}\nABSTRACT: {extract}\nALGORITHM: {algorithm}\nAMBIGUOUS: {}\n",
+        if algorithm == "yes" { "no" } else { "yes" }
+    )
+}
+
+fn xml_tag(block: &str, name: &str) -> String {
+    let open = format!("<{name}");
+    let close = format!("</{name}>");
+    let Some(start) = block.find(&open) else {
+        return String::new();
+    };
+    let after = &block[start..];
+    let Some(gt) = after.find('>') else {
+        return String::new();
+    };
+    after[gt + 1..]
+        .split(&close)
+        .next()
+        .unwrap_or("")
+        .replace('\n', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn looks_like_html(raw: &str) -> bool {
+    let lower = raw.to_ascii_lowercase();
+    lower.contains("<html") || lower.contains("<article") || lower.contains("<p>")
+}
+
+fn urlencoding(value: &str) -> String {
+    let mut out = String::new();
+    for ch in value.chars() {
+        match ch {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(ch),
+            ' ' => out.push('+'),
+            _ => {
+                for byte in ch.encode_utf8(&mut [0; 4]).as_bytes() {
+                    out.push_str(&format!("%{byte:02X}"));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn decode_url(value: &str) -> String {
+    let mut out = String::new();
+    let bytes = value.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = &value[i + 1..i + 3];
+            if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                out.push(byte as char);
+                i += 3;
+                continue;
+            }
+        }
+        if bytes[i] == b'+' {
+            out.push(' ');
+        } else {
+            out.push(bytes[i] as char);
+        }
+        i += 1;
+    }
+    out
+}
+
 pub fn fixture_locator(root: &Path, path: &Path) -> String {
     let fixtures = root.join("fixtures");
     if let Ok(rel) = path.strip_prefix(&fixtures) {

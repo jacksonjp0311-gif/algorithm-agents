@@ -35,6 +35,37 @@ async fn runtime() -> AgentRuntime {
 }
 
 #[test]
+fn arxiv_abs_becomes_api_query() {
+    let url = agent_system::collect::canonical_fetch_url("https://arxiv.org/abs/physics/0306182");
+    assert!(url.contains("export.arxiv.org"));
+    assert!(url.contains("id_list=physics/0306182"));
+}
+
+#[test]
+fn intent_url_is_direct_scrape() {
+    let intent = agent_system::intent::parse_intent("scrape this https://arxiv.org/abs/1234.5678 for me");
+    assert_eq!(intent.kind, agent_system::intent::IntentKind::Scrape);
+    assert_eq!(intent.locator.as_deref(), Some("https://arxiv.org/abs/1234.5678"));
+    assert!(intent.live);
+}
+
+#[test]
+fn intent_arxiv_topic_is_hunt() {
+    let intent = agent_system::intent::parse_intent("find monte carlo algorithms on arxiv");
+    assert_eq!(intent.kind, agent_system::intent::IntentKind::Hunt);
+    assert!(intent.live);
+}
+
+#[test]
+fn chrome_lines_are_stripped() {
+    let text = agent_system::parse::clean_unstructured(
+        "Skip to main content\nSearch Submit Donate\nMetropolis methods for quantum Monte Carlo\nThe method samples configurations.",
+    );
+    assert!(text.to_ascii_lowercase().contains("metropolis"));
+    assert!(!text.to_ascii_lowercase().contains("skip to main"));
+}
+
+#[test]
 fn unstructured_html_is_inferred() {
     let doc = agent_system::parse::parse_source_document(
         "<html><head><title>Heap sort</title></head><body><h1>Heap sort</h1><p>In-place comparison sort.</p><pre>def heap_sort(a):\n    pass</pre></body></html>",

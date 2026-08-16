@@ -72,17 +72,27 @@ cargo run --bin algo -- archive list
 cargo run --bin algo -- ui
 ```
 
+**AI / human intent** — one sentence, one scrape:
+
+```bash
+cargo run --bin algo -- do "scrape https://arxiv.org/abs/physics/0306182"
+cargo run --bin algo -- do "find monte carlo algorithms on arxiv"
+cargo run --bin algo -- cmds
+```
+
 **Collective knowledge** — hunt the public record:
 
 ```bash
 cargo run --bin algo -- --live hunt "monte carlo" --limit 4
-cargo run --bin algo -- --live scrape "https://en.wikipedia.org/w/index.php?title=Dijkstra%27s_algorithm&action=raw"
+cargo run --bin algo -- --live scrape "https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm"
 ```
 
 Open [http://127.0.0.1:8791](http://127.0.0.1:8791). Accept or reject each card. Nothing goes into the archive unless you say so.
 
 | Command | What happens |
 | --- | --- |
+| `algo do "<human intent>"` | AI front door: scrape, hunt, or harvest from a sentence |
+| `algo cmds` | Print the operator command card |
 | `algo find "kalman"` | Search fixtures, `sources/`, and your archive |
 | `algo harvest "shortest path"` | Scout local sources, extract, queue candidates |
 | `algo --live hunt "physics"` | Search arXiv + Wikipedia, extract, queue |

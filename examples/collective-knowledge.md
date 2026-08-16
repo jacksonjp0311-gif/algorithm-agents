@@ -38,6 +38,20 @@ Result:
 
 Uncertainty is correct. The page is not a labeled fixture. The operator still gets a card and a source URL.
 
+## 3. AI intent CMD (locked 2026-08-16)
+
+```bash
+cargo run --bin algo -- do "scrape https://arxiv.org/abs/physics/0306182"
+cargo run --bin algo -- do "scrape https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm"
+```
+
+| Intent | Title | Detect |
+| --- | --- | --- |
+| arXiv abs | Metropolis Methods for Quantum Monte Carlo Simulations | **YES** |
+| Wikipedia | Dijkstra's algorithm | **YES** |
+
+Live pages are rewritten to the arXiv API and Wikipedia extract API so the detector sees a procedure, not site chrome.
+
 ## What “works” means
 
 - A real locator is attached

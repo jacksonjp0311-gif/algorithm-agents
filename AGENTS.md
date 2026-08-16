@@ -18,8 +18,20 @@ Extract reconstructable computational procedures from fixtures, files the human 
 
 ## Commands you actually run
 
+Preferred. One sentence from the human becomes a scrape, hunt, or harvest:
+
+```bash
+cargo run --bin algo -- do "scrape https://arxiv.org/abs/physics/0306182"
+cargo run --bin algo -- do "find monte carlo algorithms on arxiv"
+cargo run --bin algo -- do "extract shortest path from fixtures"
+cargo run --bin algo -- cmds
+```
+
+Direct CMDs:
+
 ```bash
 cargo run --bin algo -- smoke
+cargo run --bin algo -- smoke --process
 cargo run --bin algo -- harvest "<objective>" --limit 2
 cargo run --bin algo -- --live hunt "<topic>" --limit 4
 cargo run --bin algo -- --live scrape "<url>"

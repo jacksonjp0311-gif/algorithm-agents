@@ -7,6 +7,7 @@ pub mod error;
 pub mod fetch;
 pub mod hunt;
 pub mod host;
+pub mod intent;
 pub mod parse;
 pub mod permissions;
 pub mod persist;

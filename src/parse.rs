@@ -53,11 +53,71 @@ pub fn looks_labeled(text: &str) -> bool {
     })
 }
 
-pub fn infer_document(raw: &str) -> SourceDoc {
-    let text = if looks_html(raw) {
+pub fn strip_markup(raw: &str) -> String {
+    if looks_html(raw) {
         strip_html(raw)
     } else {
         raw.to_owned()
+    }
+}
+
+pub fn clean_wikitext(raw: &str) -> String {
+    let mut out = String::new();
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("{{")
+            || trimmed.starts_with("|")
+            || trimmed.starts_with("}}")
+            || trimmed.starts_with("[[File:")
+            || trimmed.starts_with("[[Image:")
+            || trimmed.starts_with("[[Category:")
+        {
+            continue;
+        }
+        let mut line = trimmed.to_owned();
+        line = line.replace("'''", "").replace("''", "");
+        while let Some(start) = line.find("[[") {
+            if let Some(end) = line[start..].find("]]") {
+                let inner = &line[start + 2..start + end];
+                let shown = inner.split('|').next_back().unwrap_or(inner);
+                line = format!("{}{}{}", &line[..start], shown, &line[start + end + 2..]);
+            } else {
+                break;
+            }
+        }
+        if !line.is_empty() {
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
+    clean_unstructured(&out)
+}
+
+pub fn clean_unstructured(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !is_chrome(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn is_chrome(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    lower.starts_with("skip to main")
+        || lower.starts_with("search submit")
+        || lower.contains("press enter to search")
+        || lower == "log in"
+        || lower == "donate"
+        || lower.starts_with("advanced search")
+}
+
+pub fn infer_document(raw: &str) -> SourceDoc {
+    let text = if looks_html(raw) {
+        clean_unstructured(&strip_html(raw))
+    } else if raw.contains("{{") || raw.contains("'''") {
+        clean_wikitext(raw)
+    } else {
+        clean_unstructured(raw)
     };
     let mut doc = SourceDoc {
         body: text.clone(),
@@ -211,7 +271,8 @@ fn first_heading(text: &str) -> Option<String> {
                 return Some(name.to_owned());
             }
         }
-        if trimmed.len() > 3 && trimmed.len() < 160 && !trimmed.starts_with('{') {
+        if trimmed.len() > 3 && trimmed.len() < 160 && !trimmed.starts_with('{') && !is_chrome(trimmed)
+        {
             return Some(trimmed.to_owned());
         }
     }

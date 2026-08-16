@@ -76,9 +76,19 @@ enum Command {
         #[arg(long)]
         input: Option<String>,
     },
+    /// Turn a human sentence into a scrape / hunt / harvest
+    Do {
+        intent: String,
+        #[arg(long, default_value_t = 3)]
+        limit: usize,
+    },
+    /// Print the command card an AI operator should run
+    Cmds,
     Smoke {
         #[arg(long)]
         agent: Option<String>,
+        #[arg(long)]
+        process: bool,
     },
     Demo {
         name: String,
@@ -248,11 +258,29 @@ async fn main() -> anyhow::Result<()> {
                 .await?,
             )
         }
-        Command::Smoke { agent } => {
-            let report = smoke::smoke_all(&runtime, agent.as_deref()).await?;
-            println!("{}", smoke::format_smoke_report(&report));
-            if report.get("verdict").and_then(|v| v.as_str()) != Some("PASS") {
-                std::process::exit(1);
+        Command::Do { intent, limit } => {
+            print_json(agent_system::intent::execute_intent(&mut runtime, &intent, limit).await?)
+        }
+        Command::Cmds => print_json(agent_system::intent::command_card()),
+        Command::Smoke { agent, process } => {
+            if process {
+                let report = smoke::smoke_process(&runtime).await?;
+                println!("{}", smoke::format_smoke_report(report.get("agents").unwrap_or(&report)));
+                println!(
+                    "PROCESS harvest={} demo={} verdict={}",
+                    report.get("harvest_ok").and_then(|v| v.as_bool()).unwrap_or(false),
+                    report.get("demo_ok").and_then(|v| v.as_bool()).unwrap_or(false),
+                    report.get("verdict").and_then(|v| v.as_str()).unwrap_or("FAIL")
+                );
+                if report.get("verdict").and_then(|v| v.as_str()) != Some("PASS") {
+                    std::process::exit(1);
+                }
+            } else {
+                let report = smoke::smoke_all(&runtime, agent.as_deref()).await?;
+                println!("{}", smoke::format_smoke_report(&report));
+                if report.get("verdict").and_then(|v| v.as_str()) != Some("PASS") {
+                    std::process::exit(1);
+                }
             }
         }
         Command::Ui { bind, no_open } => {

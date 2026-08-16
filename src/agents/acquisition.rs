@@ -73,11 +73,13 @@ pub async fn web_collector(ctx: &ExecContext<'_>, input: &Value) -> Result<Handl
         )
         .with_state("BLOCKED"));
     }
-    let (resolved, text) = if locator.starts_with("http://") || locator.starts_with("https://") {
-        crate::fetch::fetch_url(&ctx.runtime.permissions, locator).await?
+    let (resolved, raw) = if locator.starts_with("http://") || locator.starts_with("https://") {
+        let fetch_url = collect::canonical_fetch_url(locator);
+        crate::fetch::fetch_url(&ctx.runtime.permissions, &fetch_url).await?
     } else {
         collect::resolve_source(&ctx.runtime.root, locator)?
     };
+    let text = collect::normalize_source_text(locator, &raw);
     if text.len() > ctx.runtime.permissions.max_fetch_bytes {
         return Err(AgentError::Budget("retrieved source exceeds size limit".into()));
     }
