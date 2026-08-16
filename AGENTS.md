@@ -58,4 +58,6 @@ When the human says extract from the public record:
 - Claim a survey, chrome-filled HTML page, or unlabeled note is a clean algorithm. Mark it uncertain.
 - Expand scope into biography, payments, or a homepage.
 
-See `README.md` (human + AI) and `docs/supervisor-attach.md` (tool attach).
+The inner room, shared with the human: [`advanced/`](advanced/README.md).  
+Start with [`advanced/COVENANT.md`](advanced/COVENANT.md) and [`advanced/CMDS.md`](advanced/CMDS.md).  
+Tool attach: `docs/supervisor-attach.md`.

@@ -9,11 +9,14 @@ list_agents → start_session → run_agent / alias tools → inspect artifacts/
 Everyday operators can skip the raw tools and use:
 
 ```text
+algo do "…"
 algo find "…"
 algo harvest "…"
 algo scrape <locator>
 algo archive accept CAND-0001
 ```
+
+The shared standard for human and AI is `advanced/`.
 
 Those commands still go through `dispatch`. They do not bypass budgets or denies.
 

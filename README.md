@@ -4,59 +4,74 @@
 
 # Algorithm Agents
 
-Humanity already wrote the algorithms. They are scattered across papers, notes, code, and encyclopedias. This runtime sends a crew of specialist agents into that record, pulls a reconstructable procedure out of a source, and saves it as a reviewable card.
+This is not a chatbot with extra steps.
 
-You stay in charge. Agents find, extract, and propose. They do not publish.
+It is a **shared instrument**. A human names an intent. An AI may enter this repository and run the crew as commands. Twenty-six specialist agents walk the human record — papers, notes, code, encyclopedias — and try to lift out a reconstructable procedure. What they return is a **candidate**, not a canon.
+
+You decide what is kept.
+
+```text
+THE HUMAN SPEAKS THE INTENT
+THE AI RUNS THE COMMANDS
+THE AGENTS TOUCH ONLY THE SOURCE
+THE ARCHIVE MOVES ONLY WHEN A HUMAN ACCEPTS
+```
 
 ```text
 SUPERVISOR AUTHORITY ≠ ARCHIVE AUTHORITY
 ```
 
----
-
-## Why this is powerful
-
-Most tools summarize. This one **extracts**.
-
-Give it a question like “shortest path” or a URL from arXiv or Wikipedia. Twenty-six bounded agents hunt sources, detect whether a real procedure is present, pull the math, assumptions, complexity, and pseudocode, then check provenance. What comes back is not a chat paragraph. It is a candidate you can keep.
-
-That matters because the human collective of knowledge is huge and messy. Algorithms hide inside papers, side remarks, and unlabeled pages. A single model asked to “find algorithms” will invent, flatten, or forget. A crew with roles, budgets, and denies will stall, mark uncertainty, or refuse — and you still have the source.
-
-Use it to:
-
-- Build a private algorithm archive from public knowledge
-- Turn a paper or wiki page into a structured card in one command
-- Let another AI operate the same tool surface without giving it publication power
+That split is the whole ethic. Break it and this is just another model writing fiction into a folder. Keep it and you have something rarer: a way for people and machines to tend the same knowledge without lying about where it came from.
 
 ---
 
-## How it works
+## Why this exists
+
+Humanity already wrote the algorithms. They are buried. A single model asked to “find algorithms” will invent, flatten, or forget. This runtime does not ask one mind to be a library. It sends a **crew** with roles, budgets, and the right to fail.
+
+- **Scout** finds sources.
+- **Collector** retrieves them.
+- **Detector** says whether a procedure is actually there.
+- **Extractor** pulls math, assumptions, complexity, pseudocode.
+- **Verifiers** challenge provenance and hallucination.
+- **Nothing publishes.**
+
+What comes back is a card you can open, reject, or accept. The locator stays attached. Uncertainty is kept, not polished away.
+
+Give this to someone you trust. Give it to an AI you do not fully trust. The runtime, not the speaker, enforces the denies.
+
+---
+
+## How a human and an AI share the room
 
 ```text
-YOU  (or an AI operator)
-        │
-        ▼
-   algo hunt / scrape / harvest
-        │
-        ▼
-   26 specialist agents
-   scout → collect → detect → extract
-   math / provenance / normalize
-        │
-        ▼
-   PENDING card in data/archive/queue.json
-        │
-        ▼
-   you accept   →   local archive + card UI
+HUMAN                         AI OPERATOR                      CREW
+  │                               │                              │
+  │  "get monte carlo from arxiv" │                              │
+  │──────────────────────────────►│                              │
+  │                               │  algo do "…"                 │
+  │                               │─────────────────────────────►│
+  │                               │                              │  scout → collect
+  │                               │                              │  detect → extract
+  │                               │  PENDING card + locator      │
+  │  algo ui  /  accept or reject │◄─────────────────────────────│
+  │◄──────────────────────────────│                              │
+  │  the archive moves, or not    │                              │
 ```
 
-Live web access is **off** until you pass `--live`. Private hosts are denied even then. Fixtures in `fixtures/` prove the whole pipeline with no network.
+The human is the conscience.  
+The AI is the hands.  
+The agents are the instruments.  
+The archive is the ledger.
+
+If you are human: speak plainly, then look at the cards.  
+If you are an AI: read [`AGENTS.md`](AGENTS.md), then [`advanced/`](advanced/README.md). Do not improvise a canon.
 
 ---
 
-## Use it in five minutes
+## Enter in five minutes
 
-Requires [Rust 1.85.1+](https://rustup.rs/). The repo pins the toolchain.
+Requires [Rust 1.85.1+](https://rustup.rs/). The toolchain is pinned.
 
 ```bash
 git clone https://github.com/jacksonjp0311-gif/algorithm-agents.git
@@ -64,15 +79,15 @@ cd algorithm-agents
 cargo build --bin algo
 ```
 
-**Offline proof** — extract from the bundled record:
+Prove the crew without the network:
 
 ```bash
+cargo run --bin algo -- smoke --process
 cargo run --bin algo -- harvest "shortest path" --limit 1
-cargo run --bin algo -- archive list
 cargo run --bin algo -- ui
 ```
 
-**AI / human intent** — one sentence, one scrape:
+Speak intent — human sentence or AI command, same door:
 
 ```bash
 cargo run --bin algo -- do "scrape https://arxiv.org/abs/physics/0306182"
@@ -80,70 +95,31 @@ cargo run --bin algo -- do "find monte carlo algorithms on arxiv"
 cargo run --bin algo -- cmds
 ```
 
-**Collective knowledge** — hunt the public record:
+Open [http://127.0.0.1:8791](http://127.0.0.1:8791). Accept or reject. Nothing enters the archive unless you say so.
 
-```bash
-cargo run --bin algo -- --live hunt "monte carlo" --limit 4
-cargo run --bin algo -- --live scrape "https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm"
-```
+Live retrieval is **off** until `--live` or an intent that clearly asks for the public record. Private hosts stay denied.
 
-Open [http://127.0.0.1:8791](http://127.0.0.1:8791). Accept or reject each card. Nothing goes into the archive unless you say so.
-
-| Command | What happens |
+| Command | What it does |
 | --- | --- |
-| `algo do "<human intent>"` | AI front door: scrape, hunt, or harvest from a sentence |
-| `algo cmds` | Print the operator command card |
-| `algo find "kalman"` | Search fixtures, `sources/`, and your archive |
-| `algo harvest "shortest path"` | Scout local sources, extract, queue candidates |
-| `algo --live hunt "physics"` | Search arXiv + Wikipedia, extract, queue |
+| `algo do "<intent>"` | Front door. Turns a sentence into scrape, hunt, or harvest |
+| `algo cmds` | The command card every AI should read |
 | `algo --live scrape <url>` | One source, one extraction |
-| `algo archive accept CAND-0001` | Promote into the local archive |
-| `algo ui` | Glowing card UI for the queue and archive |
-| `algo smoke` | Compile every agent contract |
+| `algo --live hunt "physics"` | arXiv + Wikipedia, then extract |
+| `algo harvest "shortest path"` | Local fixtures and `sources/` |
+| `algo find "kalman"` | Search fixtures, notes, archive |
+| `algo archive accept CAND-0001` | Human promotion into the ledger |
+| `algo ui` | The card table |
+| `algo smoke --process` | Compile every agent and the harvest path |
 
-Drop your own notes in `sources/` as `TITLE:` / `ALGORITHM:` labeled Markdown, or leave them unstructured. The parser will infer, and mark uncertainty when it does.
+Drop notes in `sources/`. Labeled fields extract cleanly. Unstructured text is inferred and marked uncertain.
 
----
-
-## For the AI that just entered this repository
-
-You are an operator, not an author of knowledge. Read this before you touch a tool.
-
-**Mission.** Help the human extract reconstructable algorithms from sources they name, or from fixtures / arXiv / Wikipedia when they ask. Save candidates. Never pretend a candidate is canonical.
-
-**Hard rules.**
-
-1. Do not invent algorithms, papers, authors, or provenance.
-2. Do not accept or publish unless the human says to. `submit_review_candidate` creates PENDING only. `algo archive accept` is a human act unless they explicitly delegate it.
-3. Do not enable live fetch unless they asked for the network. Default path is fixtures.
-4. Do not add shopping, payments, a public product site, or a React/Next/Vue/Svelte app. `algo ui` is a local operator viewer.
-5. Do not silently rewrite `data/archive/`. Show the candidate and wait.
-6. If a source is messy, keep `UNCERTAIN` / `NEEDS_HUMAN`. Do not clean it into false confidence.
-
-**How you run the system.**
-
-```text
-cargo run --bin algo -- smoke
-cargo run --bin algo -- harvest "<objective>" --limit 2
-cargo run --bin algo -- --live hunt "<topic>" --limit 4
-cargo run --bin algo -- --live scrape "<https url>"
-cargo run --bin algo -- archive list
-cargo run --bin algo -- ui --no-open
-```
-
-Rust API for a supervisor: `agent_system::dispatch(runtime, tool, args)`. Tool schemas live in `registry/tools.json`. There is no Grok-only or Codex-only branch.
-
-**When you extract from the human collective** (web, arXiv, wiki): pass `--live`, keep `--limit` small, sleep is already built into `hunt`, and quote the real locator on every card.
-
-**Done looks like.** A PENDING candidate with a real URL or `fixture://` locator, a title taken from the source, and a card in `algo ui`. Not a paragraph you composed.
-
-Full contract: `docs/supervisor-attach.md`.
+Locked runs: [`examples/collective-knowledge.md`](examples/collective-knowledge.md).
 
 ---
 
-## What is in the box
+## The crew
 
-| Family | Agents |
+| Family | Who walks |
 | --- | --- |
 | Acquisition | source scout, web collector, paper analyst, repository scout, citation walker |
 | Analysis | detector, extractor, math / code / complexity / assumption / failure |
@@ -151,7 +127,23 @@ Full contract: `docs/supervisor-attach.md`.
 | Knowledge | deduplicator, relationship mapper, structural matcher, domain classifier, use-case mapper |
 | Synthesis | normalizer, summarizer, code translator, experiment designer |
 
-Verified walkthrough: [`examples/collective-knowledge.md`](examples/collective-knowledge.md).
+Names, duties, and how they speak to each other live in [`advanced/ROSTER.md`](advanced/ROSTER.md).
+
+---
+
+## If you were given this tool
+
+Treat the archive as someone else's memory that you are allowed to tend.
+
+Do not invent a paper to fill a hole.  
+Do not accept a card to look productive.  
+Do not strip a warning so the page looks finished.
+
+The work is the extraction **and** the refusal.
+
+Deeper room — covenant, circuit, commands, how to extend without breaking the split:
+
+**[`advanced/`](advanced/README.md)**
 
 ---
 
