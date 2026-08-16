@@ -46,13 +46,24 @@ function matchesQuery(item, query, domain) {
   return hay.includes(query);
 }
 
+function clip(text, n) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (value.length <= n) return value;
+  return `${value.slice(0, n).trim()}…`;
+}
+
+function sourceHref(item) {
+  const ext = extract(item);
+  return String(ext.source?.url || ext.source?.repository_url || "").trim();
+}
+
 function cardHtml(item) {
   const body = extract(item);
   const glow = glowFor(item);
   const uses = (body.known_uses || item.tags || []).slice(0, 3).join(" · ");
   const authors = (body.source?.authors || []).join(", ");
   const teaser = item.core_idea
-    ? `<div class="archive-teaser">${esc(item.core_idea)}</div>`
+    ? `<div class="archive-teaser">${esc(clip(item.core_idea, 180))}</div>`
     : "";
   const tags = item.tags || [];
   const tagList = tags.length
@@ -60,21 +71,22 @@ function cardHtml(item) {
     : "";
   const pending = item.status === "pending";
   const rejected = item.status === "rejected";
+  const href = sourceHref(item);
   const actions = pending
-    ? `<div class="button-row">
-        <button type="button" class="button" data-accept="${esc(item.id)}">Accept</button>
+    ? `<button type="button" class="button" data-open="${esc(item.id)}">Inspect</button>
+      <div class="button-row">
+        <button type="button" class="button button-ghost" data-accept="${esc(item.id)}">Accept</button>
         <button type="button" class="button button-ghost" data-reject="${esc(item.id)}">Reject</button>
-      </div>
-      <button type="button" class="button button-ghost" data-open="${esc(item.id)}">Open</button>`
-    : `<button type="button" class="button" data-open="${esc(item.id)}">Open</button>`;
-  return `<article class="archive-card${pending ? " is-pending" : ""}${rejected ? " is-rejected" : ""}" data-glow="${glow}" data-id="${esc(item.id)}">
+      </div>`
+    : `<button type="button" class="button" data-open="${esc(item.id)}">Inspect</button>`;
+  return `<article class="archive-card is-inspectable${pending ? " is-pending" : ""}${rejected ? " is-rejected" : ""}" data-glow="${glow}" data-id="${esc(item.id)}" data-open-card="${esc(item.id)}" tabindex="0">
     <p class="status-pill">${esc(item.status || "accepted")}</p>
     <p class="archive-id">${esc(item.archive_id)}</p>
     <h2>${esc(item.title || "Untitled")}</h2>
     <p class="meta-row">${esc(item.domain || "Unsorted")}${body.source?.type ? " · " + esc(body.source.type) : ""}</p>
-    <p>${esc(item.summary || "No summary yet.")}</p>
+    <p>${esc(clip(item.summary || body.plain_language_explanation || "No summary yet.", 240))}</p>
     ${teaser}
-    <p class="meta-row"><strong>Source</strong> ${esc(authors || body.source?.title || "—")}${body.source?.publication_date ? " · " + esc(body.source.publication_date) : ""}</p>
+    <p class="meta-row"><strong>Source</strong> ${esc(authors || body.source?.title || href || "—")}${body.source?.publication_date ? " · " + esc(body.source.publication_date) : ""}</p>
     <p class="meta-row"><strong>Uses</strong> ${esc(uses || "—")}</p>
     ${tagList}
     ${actions}
@@ -139,14 +151,35 @@ function renderChips() {
 }
 
 function bindCards(root) {
+  root.querySelectorAll("[data-open-card]").forEach((card) => {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("[data-accept], [data-reject], [data-open]")) return;
+      openHud(card.dataset.openCard, card);
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openHud(card.dataset.openCard, card);
+      }
+    });
+  });
   root.querySelectorAll("[data-open]").forEach((button) => {
-    button.addEventListener("click", () => openHud(button.dataset.open, button));
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openHud(button.dataset.open, button);
+    });
   });
   root.querySelectorAll("[data-accept]").forEach((button) => {
-    button.addEventListener("click", () => accept(button.dataset.accept));
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      accept(button.dataset.accept);
+    });
   });
   root.querySelectorAll("[data-reject]").forEach((button) => {
-    button.addEventListener("click", () => reject(button.dataset.reject));
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      reject(button.dataset.reject);
+    });
   });
 }
 
@@ -203,39 +236,48 @@ function openHud(id, origin) {
   if (!item || !dialog || !body) return;
   lastFocus = origin || document.activeElement;
   const ext = extract(item);
-  const sourceUrl = ext.source?.url || "";
+  const sourceUrl = sourceHref(item);
+  const pending = item.status === "pending";
   body.innerHTML = `
-    <p class="eyebrow">${esc(item.archive_id)}</p>
+    <p class="eyebrow">Inspect · ${esc(item.archive_id)}</p>
     <h2 id="hud-title">${esc(item.title)}</h2>
-    <p class="meta-row">Domain ${esc(item.domain)} · ${esc(item.status).toUpperCase()}</p>
-    ${sourceUrl ? `<p><a href="${esc(sourceUrl)}" target="_blank" rel="noopener">Open source</a></p>` : ""}
-    <section><h3>Overview</h3>
-      <p>${esc(ext.plain_language_explanation || item.summary)}</p>
+    <p class="meta-row">${esc(item.domain || "Unsorted")} · ${esc(item.status).toUpperCase()}</p>
+    <nav class="inspect-nav" aria-label="Inspect sections">
+      <a href="#inspect-overview">Overview</a>
+      <a href="#inspect-math">Math</a>
+      <a href="#inspect-code">Code</a>
+      <a href="#inspect-source">Source</a>
+    </nav>
+    ${sourceUrl ? `<p><a class="text-link" href="${esc(sourceUrl)}" target="_blank" rel="noopener">Open original source</a></p>` : ""}
+    <section id="inspect-overview"><h3>Overview</h3>
+      <p>${esc(ext.plain_language_explanation || item.summary || "No overview was extracted.")}</p>
       <p><strong>Core idea.</strong> ${esc(item.core_idea || ext.core_idea || "—")}</p>
       <p><strong>Why it matters.</strong> ${esc(ext.why_it_matters || "—")}</p>
     </section>
-    <section><h3>Mathematics</h3>
-      <pre>${esc(ext.math || item.core_idea || "")}</pre>
+    <section id="inspect-math"><h3>Mathematics</h3>
+      <pre>${esc(ext.math || item.core_idea || "No math field was extracted.")}</pre>
       <h4>Variables</h4>${listHtml(ext.variables)}
       <h4>Assumptions</h4>${listHtml(ext.assumptions)}
       <h4>Constraints</h4>${listHtml(ext.constraints)}
       ${ext.complexity ? `<p><strong>Complexity.</strong> ${esc(ext.complexity)}</p>` : ""}
     </section>
-    <section><h3>Pseudocode</h3><pre>${esc(ext.pseudocode || "")}</pre></section>
-    <section><h3>Reference implementation</h3>
-      <p class="meta-row">${esc(ext.reference_language || "python")}</p>
-      <pre>${esc(ext.reference_code || "")}</pre>
+    <section id="inspect-code"><h3>Pseudocode</h3><pre>${esc(ext.pseudocode || "No pseudocode was extracted.")}</pre>
+      <h3>Reference implementation</h3>
+      <p class="meta-row">${esc(ext.reference_language || "unspecified")}</p>
+      <pre>${esc(ext.reference_code || "No reference code was extracted.")}</pre>
     </section>
-    <section><h3>Uses</h3>
-      <h4>Known common uses</h4>${listHtml(ext.known_uses)}
-      <h4>Possible uses</h4>${listHtml(ext.potential_uses)}
-    </section>
-    <section><h3>Provenance</h3>
-      <p>${esc(ext.source?.title || "")} (${esc(ext.source?.type || "")})</p>
-      <p>${esc((ext.source?.authors || []).join(", "))} · ${esc(ext.source?.publication_date || "")}</p>
+    <section id="inspect-source"><h3>Source</h3>
+      <p>${esc(ext.source?.title || item.title)} (${esc(ext.source?.type || "source")})</p>
+      <p>${esc((ext.source?.authors || []).join(", ") || "Authors not listed")} · ${esc(ext.source?.publication_date || "")}</p>
+      ${sourceUrl ? `<p class="meta-row">${esc(sourceUrl)}</p>` : ""}
       <p>${esc(ext.provenance?.evidence_notes || "")}</p>
     </section>
+    ${pending ? `<div class="button-row inspect-decide">
+      <button type="button" class="button" data-accept="${esc(item.id)}">Accept into archive</button>
+      <button type="button" class="button button-ghost" data-reject="${esc(item.id)}">Reject</button>
+    </div>` : ""}
   `;
+  bindCards(body);
   if (typeof dialog.showModal === "function") dialog.showModal();
   else dialog.setAttribute("open", "");
 }
@@ -296,10 +338,15 @@ document.addEventListener("keydown", (event) => {
   document.querySelector(sel)?.addEventListener("input", paint);
 });
 
-loadCatalog().catch((error) => {
-  const mount = document.querySelector("#archive-grid");
-  if (mount) mount.innerHTML = `<div class="empty-state">${esc(error.message)}</div>`;
-});
+loadCatalog()
+  .then(() => {
+    const inspectId = new URLSearchParams(location.search).get("inspect");
+    if (inspectId) openHud(inspectId, null);
+  })
+  .catch((error) => {
+    const mount = document.querySelector("#archive-grid");
+    if (mount) mount.innerHTML = `<div class="empty-state">${esc(error.message)}</div>`;
+  });
 setInterval(() => {
   loadCatalog().catch(() => {});
 }, 4000);

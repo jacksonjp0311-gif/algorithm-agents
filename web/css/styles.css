@@ -144,6 +144,29 @@ button, input, select { font: inherit; }
   border-radius: 22px;
   background: linear-gradient(165deg, rgba(10, 42, 56, 0.96), rgba(8, 22, 34, 0.96) 58%, rgba(72, 32, 110, 0.28));
 }
+.archive-card.is-inspectable { cursor: pointer; }
+.archive-card.is-inspectable:focus-visible {
+  outline: 2px solid #3ec8ff;
+  outline-offset: 3px;
+}
+.inspect-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin: .85rem 0 1rem;
+}
+.inspect-nav a {
+  padding: .28rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #7ad4ff;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.text-link { color: #7ad4ff; font-weight: 700; text-decoration: underline; }
+.inspect-decide { margin-top: 1.4rem; }
 .archive-card h2 {
   margin: .15rem 0 .4rem;
   font-size: clamp(1.45rem, 2.4vw, 1.85rem);
