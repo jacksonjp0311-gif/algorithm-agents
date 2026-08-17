@@ -2,7 +2,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sqlx::{Row, SqlitePool};
+use sqlx::Row;
+use sqlx_sqlite::SqlitePool;
 
 use crate::error::AgentError;
 use crate::parse::{contains_claim, parse_all_documents};

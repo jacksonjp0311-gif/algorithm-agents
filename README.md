@@ -75,7 +75,7 @@ If you are an AI: read [`AGENTS.md`](AGENTS.md), then [`advanced/`](advanced/REA
 
 ## Enter in five minutes
 
-Requires [Rust 1.85.1+](https://rustup.rs/). The toolchain is pinned.
+Requires [Rust 1.88+](https://rustup.rs/). The toolchain is pinned to 1.88.0.
 
 ```bash
 git clone https://github.com/jacksonjp0311-gif/algorithm-agents.git

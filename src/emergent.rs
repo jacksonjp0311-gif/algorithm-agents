@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sqlx::{Row, SqlitePool};
+use sqlx::Row;
+use sqlx_sqlite::SqlitePool;
 
 use crate::error::AgentError;
 use crate::persist;
@@ -381,7 +382,7 @@ async fn list_challenges(pool: &SqlitePool, hypothesis_id: &str) -> Result<Vec<V
         .collect())
 }
 
-fn hypothesis_from_row(row: sqlx::sqlite::SqliteRow, challenges: Vec<Value>) -> Value {
+fn hypothesis_from_row(row: sqlx_sqlite::SqliteRow, challenges: Vec<Value>) -> Value {
     let evidence: String = row.get("evidence_json");
     let refs: String = row.get("node_refs_json");
     let model: String = row.get("model_json");
@@ -414,7 +415,7 @@ async fn get_research_log(pool: &SqlitePool, log_id: &str) -> Result<Value, Agen
     Ok(research_log_from_row(row))
 }
 
-fn research_log_from_row(row: sqlx::sqlite::SqliteRow) -> Value {
+fn research_log_from_row(row: sqlx_sqlite::SqliteRow) -> Value {
     let model: String = row.get("model_json");
     let sources: String = row.get("sources_json");
     let refs: String = row.get("node_refs_json");

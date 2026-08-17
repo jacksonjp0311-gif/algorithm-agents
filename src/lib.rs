@@ -1,3 +1,12 @@
+extern crate self as sqlx;
+
+pub use sqlx_core::error::Error;
+pub use sqlx_core::query::query;
+pub use sqlx_core::query_scalar::query_scalar;
+pub use sqlx_core::raw_sql::raw_sql;
+pub use sqlx_core::row::Row;
+pub use sqlx_core::transaction::Transaction;
+
 pub mod agents;
 pub mod archive;
 pub mod archive_match;
@@ -40,7 +49,7 @@ pub use tools::dispatch;
 use std::path::Path;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx_sqlite::SqlitePool;
 
 pub async fn open_runtime(
     root: impl AsRef<Path>,

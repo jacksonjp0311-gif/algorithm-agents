@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::{Row, SqlitePool, sqlite::SqliteConnectOptions};
+use sqlx::Row;
+use sqlx_sqlite::{SqliteConnectOptions, SqlitePool};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::error::AgentError;
@@ -237,7 +238,7 @@ pub async fn list_sessions(pool: &SqlitePool) -> Result<Vec<Session>, AgentError
     Ok(rows.iter().map(session_from_row).collect())
 }
 
-fn session_from_row(row: &sqlx::sqlite::SqliteRow) -> Session {
+fn session_from_row(row: &sqlx_sqlite::SqliteRow) -> Session {
     let agents: String = row.get("authorized_agents_json");
     let tools: String = row.get("authorized_tools_json");
     Session {
@@ -321,7 +322,7 @@ pub async fn list_runs(pool: &SqlitePool, session_id: &str) -> Result<Vec<AgentR
     Ok(rows.iter().map(run_from_row).collect())
 }
 
-fn run_from_row(row: &sqlx::sqlite::SqliteRow) -> AgentRun {
+fn run_from_row(row: &sqlx_sqlite::SqliteRow) -> AgentRun {
     let input: String = row.get("input_json");
     let output: String = row.get("output_json");
     AgentRun {

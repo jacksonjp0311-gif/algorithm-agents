@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::SqlitePool;
+use sqlx_sqlite::SqlitePool;
 use tokio::sync::Mutex;
 
 use crate::error::AgentError;

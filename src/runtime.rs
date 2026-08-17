@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use sqlx::SqlitePool;
+use sqlx_sqlite::SqlitePool;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::agents::{self, ExecContext, HandlerResult};

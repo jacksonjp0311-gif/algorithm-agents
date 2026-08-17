@@ -1,4 +1,4 @@
-FROM rust:1.85.1-bookworm AS builder
+FROM rust:1.88.0-bookworm AS builder
 WORKDIR /src
 COPY . .
 RUN cargo build --locked --release --bin algo

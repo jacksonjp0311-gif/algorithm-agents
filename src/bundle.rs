@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::SqlitePool;
+use sqlx_sqlite::SqlitePool;
 
 use crate::archive::FileArchive;
 use crate::error::AgentError;

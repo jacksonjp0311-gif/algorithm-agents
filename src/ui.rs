@@ -9,7 +9,7 @@ use axum::response::{IntoResponse, Json};
 use axum::routing::{get, post};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sqlx::SqlitePool;
+use sqlx_sqlite::SqlitePool;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::archive::{FileArchive, ReviewDecision};

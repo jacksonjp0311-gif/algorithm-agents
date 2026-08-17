@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::{Row, SqlitePool};
+use sqlx::Row;
+use sqlx_sqlite::SqlitePool;
 
 use crate::error::AgentError;
 use crate::host::PublishedAlgorithm;
@@ -433,7 +434,7 @@ async fn get_dispute(pool: &SqlitePool, dispute_id: &str) -> Result<KnowledgeDis
     Ok(dispute_from_row(row))
 }
 
-fn dispute_from_row(row: sqlx::sqlite::SqliteRow) -> KnowledgeDispute {
+fn dispute_from_row(row: sqlx_sqlite::SqliteRow) -> KnowledgeDispute {
     KnowledgeDispute {
         dispute_id: row.get("dispute_id"),
         target_type: row.get("target_type"),
@@ -502,7 +503,7 @@ async fn get_proposal(
     Ok(proposal_from_row(row))
 }
 
-fn proposal_from_row(row: sqlx::sqlite::SqliteRow) -> RelationshipProposal {
+fn proposal_from_row(row: sqlx_sqlite::SqliteRow) -> RelationshipProposal {
     RelationshipProposal {
         proposal_id: row.get("proposal_id"),
         session_id: row.get("session_id"),
@@ -521,7 +522,7 @@ fn proposal_from_row(row: sqlx::sqlite::SqliteRow) -> RelationshipProposal {
 
 #[allow(clippy::too_many_arguments)]
 async fn upsert_node(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    transaction: &mut sqlx::Transaction<'_, sqlx_sqlite::Sqlite>,
     node_id: &str,
     kind: &str,
     canonical: bool,
@@ -552,7 +553,7 @@ async fn upsert_node(
 }
 
 async fn insert_edge(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    transaction: &mut sqlx::Transaction<'_, sqlx_sqlite::Sqlite>,
     from_node: &str,
     to_node: &str,
     relation: &str,
