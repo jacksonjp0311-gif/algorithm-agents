@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/extracting-agents.jpg" alt="Specialist agents drawing procedures out of the human record and condensing them into archive cards" width="100%">
-</p>
+![Specialist agents drawing procedures out of the human record and condensing them into archive cards](docs/extracting-agents.jpg)
 
 # Alchetron
 
