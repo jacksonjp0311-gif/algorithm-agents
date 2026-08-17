@@ -134,13 +134,14 @@ impl SupervisorAdapter for ScriptedSupervisor {
 /// Attach contract for Grok / Codex. The runtime does not special-case either provider.
 pub fn attach_contract() -> Value {
     serde_json::json!({
-        "protocol_version": "1.0",
+        "protocol_version": "2.0",
         "interface": "SupervisorEnvelope(provider, model, tool, args) → audited ToolResult",
-        "surfaces": ["rust", "cli: algo supervisor --request <json>", "future MCP"],
+        "surfaces": ["rust", "cli: algo supervisor --request <json>", "MCP stdio"],
         "providers": {
             "grok": "Call the same tools.json schemas. Do not embed provider-specific orchestration in the runtime.",
             "codex": "Call the same tools.json schemas. Do not embed provider-specific orchestration in the runtime."
         },
+        "direct_model_adapters": crate::model::capabilities(),
         "publication": false,
         "archive_authority": "human operator only",
         "required_fields": ["protocol_version", "provider", "model", "tool", "args"]
@@ -163,7 +164,7 @@ pub struct SupervisorEnvelope {
 }
 
 fn protocol_version() -> String {
-    "1.0".into()
+    "2.0".into()
 }
 
 fn empty_object() -> Value {
@@ -174,7 +175,7 @@ pub async fn execute_envelope(
     runtime: &AgentRuntime,
     mut envelope: SupervisorEnvelope,
 ) -> Result<Value, AgentError> {
-    if envelope.protocol_version != "1.0" {
+    if !matches!(envelope.protocol_version.as_str(), "1.0" | "2.0") {
         return Err(AgentError::Invalid(format!(
             "unsupported supervisor protocol {}",
             envelope.protocol_version

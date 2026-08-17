@@ -179,6 +179,36 @@ pub async fn dispatch(
             "proposals": crate::graph::list_proposals(&runtime.pool).await?
         })),
         "get_canonical_graph" => crate::graph::graph_snapshot(&runtime.pool, false).await,
+        "propose_hypothesis" => {
+            let input = serde_json::from_value(args)?;
+            crate::emergent::propose_hypothesis(&runtime.pool, input).await
+        }
+        "challenge_hypothesis" => {
+            crate::emergent::challenge_hypothesis(
+                &runtime.pool,
+                required_str(&args, "hypothesis_id")?,
+                required_str(&args, "challenger")?,
+                required_str(&args, "verdict")?,
+                required_str(&args, "rationale")?,
+                args.get("evidence").cloned().unwrap_or_else(|| json!([])),
+            )
+            .await
+        }
+        "create_research_log" => {
+            let input = serde_json::from_value(args)?;
+            crate::emergent::create_research_log(&runtime.pool, input).await
+        }
+        "list_public_research_logs" => Ok(json!({
+            "logs": crate::emergent::list_research_logs(&runtime.pool, false).await?
+        })),
+        "graph_integrity" => crate::graph::integrity_report(&runtime.pool).await,
+        "get_capabilities" => Ok(json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "models": crate::model::capabilities(),
+            "mcp": crate::mcp::descriptor(),
+            "graph": crate::graph::ontology(),
+            "archive_authority": "human operator only"
+        })),
         "submit_review_candidate" => {
             let normalized = args
                 .get("normalized")

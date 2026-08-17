@@ -98,6 +98,18 @@ impl AgentRuntime {
                 return cwd.join("agent_system");
             }
         }
+        if let Ok(executable) = std::env::current_exe() {
+            if let Some(parent) = executable.parent() {
+                for candidate in [parent.to_path_buf(), parent.join("..")]
+                    .into_iter()
+                    .filter_map(|path| path.canonicalize().ok())
+                {
+                    if candidate.join("registry/agents.json").exists() {
+                        return candidate;
+                    }
+                }
+            }
+        }
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 

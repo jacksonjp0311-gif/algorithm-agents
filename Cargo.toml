@@ -1,6 +1,6 @@
 [package]
 name = "algorithm-agents"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2024"
 description = "Session-scoped multi-agent runtime that discovers, extracts, reviews, and saves algorithms"
 license = "MIT"
@@ -24,7 +24,7 @@ anyhow = "1"
 async-trait = "0.1"
 axum = "0.8"
 clap = { version = "4", features = ["derive"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "http2"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "http2", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

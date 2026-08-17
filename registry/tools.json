@@ -427,6 +427,51 @@
       "description": "Read canonical knowledge graph nodes and edges",
       "session_required": false,
       "args": { "type": "object" }
+    },
+    {
+      "id": "propose_hypothesis",
+      "description": "Submit a private evidence-backed emergent hypothesis",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": ["title", "thesis", "confidence", "evidence", "proposed_by"]
+      }
+    },
+    {
+      "id": "challenge_hypothesis",
+      "description": "Challenge a private hypothesis without changing canon",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": ["hypothesis_id", "challenger", "verdict", "rationale"]
+      }
+    },
+    {
+      "id": "create_research_log",
+      "description": "Create a private model or human research log for review",
+      "session_required": false,
+      "args": {
+        "type": "object",
+        "required": ["title", "body", "author_type", "author_name"]
+      }
+    },
+    {
+      "id": "list_public_research_logs",
+      "description": "Read human-reviewed public research logs",
+      "session_required": false,
+      "args": { "type": "object" }
+    },
+    {
+      "id": "graph_integrity",
+      "description": "Read canonical graph integrity diagnostics",
+      "session_required": false,
+      "args": { "type": "object" }
+    },
+    {
+      "id": "get_capabilities",
+      "description": "Discover Alchetron model, graph, MCP, and authority capabilities",
+      "session_required": false,
+      "args": { "type": "object" }
     }
   ]
 }

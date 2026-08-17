@@ -1,0 +1,7 @@
+target
+.git
+data
+sources/*
+!sources/README.md
+*.db
+*.tmp

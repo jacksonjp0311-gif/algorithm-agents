@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::error::AgentError;
+use crate::evidence;
 use crate::persist;
 use crate::runtime::AgentRuntime;
 use crate::supervisor::{ScriptedSupervisor, SupervisorAdapter};
@@ -163,6 +164,15 @@ async fn extract_and_save(
         .get("artifact_id")
         .and_then(|v| v.as_str())
         .unwrap_or("");
+    let (_, source_body) = persist::get_artifact(&runtime.pool, artifact).await?;
+    let snapshot = evidence::capture_source_snapshot(
+        &runtime.pool,
+        &runtime.data_dir,
+        session_id,
+        artifact,
+        &source_body,
+    )
+    .await?;
     let detect = supervisor
         .request_tool(
             runtime,
@@ -303,7 +313,7 @@ async fn extract_and_save(
         .and_then(|v| v.get("normalized"))
         .cloned()
         .unwrap_or_else(|| json!({ "title": "Unknown" }));
-    let verification = verification_report(
+    let mut verification = verification_report(
         &detect,
         &math_verification,
         &provenance,
@@ -343,6 +353,47 @@ async fn extract_and_save(
             }),
         );
     }
+    let claims = evidence::build_claim_records(&normalized, &snapshot);
+    let evidenced = claims
+        .iter()
+        .filter(|claim| !claim.evidence.is_empty())
+        .count();
+    let evidence_coverage = if claims.is_empty() {
+        0.0
+    } else {
+        evidenced as f64 / claims.len() as f64
+    };
+    if let Some(gates) = verification.get_mut("gates").and_then(Value::as_object_mut) {
+        gates.insert("evidence_coverage".into(), json!(evidence_coverage));
+        gates.insert("evidenced_claims".into(), json!(evidenced));
+        gates.insert("total_claims".into(), json!(claims.len()));
+    }
+    let manifest =
+        evidence::write_run_manifest(&runtime.pool, &runtime.data_dir, session_id, &snapshot)
+            .await?;
+    if let Some(object) = normalized.as_object_mut() {
+        object.insert("validation".into(), verification.clone());
+        object.insert(
+            "source_snapshot".into(),
+            json!({
+                "snapshot_id": snapshot.snapshot_id,
+                "content_hash": snapshot.content_hash,
+                "locator": snapshot.locator,
+                "resolved": snapshot.resolved,
+                "bytes": snapshot.bytes,
+                "captured_at": snapshot.captured_at
+            }),
+        );
+        object.insert("claims".into(), serde_json::to_value(&claims)?);
+        object.insert(
+            "run_manifest".into(),
+            json!({
+                "manifest_id": manifest.get("manifest_id"),
+                "schema_version": manifest.get("schema_version"),
+                "created_at": manifest.get("created_at")
+            }),
+        );
+    }
     let submitted = supervisor
         .request_tool(
             runtime,
@@ -356,6 +407,9 @@ async fn extract_and_save(
             }),
         )
         .await?;
+    if let Some(candidate_id) = submitted.get("candidate_id").and_then(Value::as_str) {
+        evidence::persist_claims(&runtime.pool, session_id, candidate_id, &claims).await?;
+    }
     Ok(json!({
         "locator": locator,
         "artifact_id": artifact,

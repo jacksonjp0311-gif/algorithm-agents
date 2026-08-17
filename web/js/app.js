@@ -9,6 +9,51 @@ if (startupParams.get("operator_token")) {
   history.replaceState({}, "", `${location.pathname}${cleanQuery ? `?${cleanQuery}` : ""}${location.hash}`);
 }
 const operatorToken = sessionStorage.getItem("alchetron_operator_token") || "";
+let actionResolver = null;
+
+function showToast(message) {
+  const toast = document.querySelector("#toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  window.clearTimeout(showToast.timer);
+  showToast.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
+}
+
+function fieldHtml(field) {
+  const required = field.required === false ? "" : " required";
+  const value = esc(field.value || "");
+  if (field.type === "textarea") {
+    return `<div class="action-field"><label for="action-${esc(field.name)}">${esc(field.label)}</label><textarea id="action-${esc(field.name)}" name="${esc(field.name)}"${required}>${value}</textarea></div>`;
+  }
+  if (field.type === "select") {
+    return `<div class="action-field"><label for="action-${esc(field.name)}">${esc(field.label)}</label><select id="action-${esc(field.name)}" name="${esc(field.name)}"${required}>${(field.options || []).map((option) => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join("")}</select></div>`;
+  }
+  return `<div class="action-field"><label for="action-${esc(field.name)}">${esc(field.label)}</label><input id="action-${esc(field.name)}" name="${esc(field.name)}" type="${esc(field.type || "text")}" value="${value}"${required}></div>`;
+}
+
+window.openGovernedAction = function openGovernedAction(config) {
+  const dialog = document.querySelector("#action-dialog");
+  if (!dialog) return Promise.resolve(null);
+  document.querySelector("#action-kicker").textContent = config.kicker || "Governed action";
+  document.querySelector("#action-title").textContent = config.title || "Review";
+  document.querySelector("#action-explainer").textContent = config.explainer || "";
+  document.querySelector("#action-boundary").textContent = config.boundary || "This action is recorded in the event ledger.";
+  document.querySelector("#action-submit").textContent = config.submitLabel || "Continue";
+  document.querySelector("#action-fields").innerHTML = (config.fields || []).map(fieldHtml).join("");
+  if (dialog.open) dialog.close();
+  dialog.showModal();
+  requestAnimationFrame(() => dialog.querySelector("input, textarea, select")?.focus());
+  return new Promise((resolve) => { actionResolver = resolve; });
+};
+
+function closeAction(result = null) {
+  const dialog = document.querySelector("#action-dialog");
+  if (dialog?.open) dialog.close();
+  const resolve = actionResolver;
+  actionResolver = null;
+  if (resolve) resolve(result);
+}
 
 function esc(value) {
   return String(value ?? "")
@@ -193,6 +238,12 @@ function bindCards(root) {
       reject(button.dataset.reject);
     });
   });
+  root.querySelectorAll("[data-edit]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      editCandidate(button.dataset.edit);
+    });
+  });
 }
 
 function renderQueue() {
@@ -268,6 +319,7 @@ function openHud(id, origin) {
     <nav class="inspect-nav" aria-label="Inspect sections">
       <a href="#inspect-overview">Overview</a>
       <a href="#inspect-verification">Verification</a>
+      <a href="#inspect-evidence">Evidence</a>
       <a href="#inspect-math">Math</a>
       <a href="#inspect-code">Code</a>
       <a href="#inspect-source">Source</a>
@@ -284,6 +336,13 @@ function openHud(id, origin) {
       <p><strong>Mandatory gates.</strong> ${ext.validation?.mandatory_pass ? "Passed" : "Needs human judgment"}</p>
       <pre>${esc(JSON.stringify(ext.validation?.gates || {}, null, 2))}</pre>
       <p class="meta-row">Candidate hash ${esc(item.candidate_hash || "—")}</p>
+    </section>
+    <section id="inspect-evidence"><h3>Claim evidence</h3>
+      <p class="meta-row">Snapshot ${esc(ext.source_snapshot?.snapshot_id || "legacy source")} · ${esc(String(ext.source_snapshot?.content_hash || "").slice(0, 18) || "hash unavailable")}</p>
+      <div class="evidence-grid">${(ext.claims || []).length ? ext.claims.map((claim) => {
+        const span = claim.evidence?.[0];
+        return `<article class="evidence-claim${span ? "" : " is-inferred"}"><p class="status-pill">${esc(claim.epistemic_status || "UNKNOWN")}</p><strong>${esc(claim.field || "claim")}</strong><p>${esc(claim.text)}</p>${span ? `<blockquote>“${esc(span.quote)}”</blockquote><small>Lines ${esc(span.start_line)}–${esc(span.end_line)} · bytes ${esc(span.start_byte)}–${esc(span.end_byte)}</small>` : `<small>No exact source span. Human verification required.</small>`}</article>`;
+      }).join("") : `<p class="empty-state">Legacy candidate: no claim-level evidence package.</p>`}</div>
     </section>
     <section id="inspect-math"><h3>Mathematics</h3>
       <pre>${esc(ext.math || item.core_idea || "No math field was extracted.")}</pre>
@@ -305,6 +364,7 @@ function openHud(id, origin) {
     </section>
     ${reviewable ? `<div class="button-row inspect-decide">
       <button type="button" class="button" data-accept="${esc(item.id)}">Accept into archive</button>
+      <button type="button" class="button button-ghost" data-edit="${esc(item.id)}">Edit working candidate</button>
       <button type="button" class="button button-ghost" data-reject="${esc(item.id)}">Reject</button>
     </div>` : ""}
   `;
@@ -327,34 +387,41 @@ async function accept(id) {
     window.alert("Open the operator URL printed by `algo ui`; a session token is required.");
     return;
   }
-  const confirmation = window.prompt(`Type ${id} to confirm canonical publication.`);
-  if (confirmation !== id) return;
-  const reviewer = window.prompt("Reviewer name", "human-operator") || "";
-  const reason = window.prompt("Why is this candidate ready for canon?") || "";
-  if (!reviewer.trim() || reason.trim().length < 4) {
-    window.alert("Reviewer and a meaningful reason are required.");
-    return;
-  }
-  const response = await fetch(`/api/queue/${encodeURIComponent(id)}/accept`, {
+  const decision = await window.openGovernedAction({
+    kicker: "Canonical publication boundary",
+    title: `Review ${id}`,
+    explainer: "This creates an immutable canonical revision, receipt, graph update, and rollback point.",
+    submitLabel: "Publish reviewed candidate",
+    boundary: "Type the exact candidate ID. Agent and model output cannot perform this action.",
+    fields: [
+      { name: "confirmation", label: `Exact confirmation · ${id}` },
+      { name: "reviewer", label: "Human reviewer", value: "human-operator" },
+      { name: "reason", label: "Evidence-based review reason", type: "textarea" },
+    ],
+  });
+  if (!decision) return;
+  const response = await fetch(`/api/v1/operator/queue/${encodeURIComponent(id)}/accept`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-alchetron-operator-token": operatorToken,
     },
     body: JSON.stringify({
-      confirmation,
-      reviewer,
-      reason,
+      confirmation: decision.confirmation,
+      reviewer: decision.reviewer,
+      reason: decision.reason,
       candidate_hash: item.candidate_hash || "",
       override_contested: item.status !== "pending",
     }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: "Accept failed." }));
-    window.alert(body.error || "Accept failed.");
+    showToast(body.error || "Accept failed.");
     return;
   }
   await loadCatalog();
+  closeHud();
+  showToast(`${id} entered immutable canon.`);
 }
 
 async function reject(id) {
@@ -362,23 +429,72 @@ async function reject(id) {
     window.alert("Open the operator URL printed by `algo ui`; a session token is required.");
     return;
   }
-  const confirmation = window.prompt(`Type ${id} to confirm rejection.`);
-  if (confirmation !== id) return;
-  const reason = window.prompt("Why are you rejecting this candidate?", "insufficient evidence") || "";
-  const response = await fetch(`/api/queue/${encodeURIComponent(id)}/reject`, {
+  const decision = await window.openGovernedAction({
+    kicker: "Private review decision",
+    title: `Reject ${id}`,
+    explainer: "The candidate remains in the audit trail but cannot enter canon.",
+    submitLabel: "Record rejection",
+    fields: [
+      { name: "confirmation", label: `Exact confirmation · ${id}` },
+      { name: "reason", label: "Rejection reason", type: "textarea", value: "insufficient evidence" },
+    ],
+  });
+  if (!decision) return;
+  const response = await fetch(`/api/v1/operator/queue/${encodeURIComponent(id)}/reject`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-alchetron-operator-token": operatorToken,
     },
-    body: JSON.stringify({ reason, confirmation }),
+    body: JSON.stringify({ reason: decision.reason, confirmation: decision.confirmation }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: "Reject failed." }));
-    window.alert(body.error || "Reject failed.");
+    showToast(body.error || "Reject failed.");
     return;
   }
   await loadCatalog();
+  closeHud();
+  showToast(`${id} rejection recorded.`);
+}
+
+async function editCandidate(id) {
+  const item = findItem(id);
+  if (!item || !operatorToken) return;
+  const ext = structuredClone(extract(item));
+  const edit = await window.openGovernedAction({
+    kicker: "Working candidate",
+    title: `Edit ${id}`,
+    explainer: "Edits change private working state and force human revalidation. Canon is untouched.",
+    submitLabel: "Save private revision",
+    fields: [
+      { name: "title", label: "Title", value: ext.title || item.title },
+      { name: "summary", label: "Summary", type: "textarea", value: ext.summary || item.summary },
+      { name: "core_idea", label: "Core idea", type: "textarea", value: ext.core_idea || item.core_idea },
+      { name: "math", label: "Mathematics", type: "textarea", value: ext.math || "", required: false },
+      { name: "editor", label: "Human editor", value: "human-operator" },
+      { name: "reason", label: "Why this edit is necessary", type: "textarea" },
+      { name: "confirmation", label: `Exact confirmation · ${id}` },
+    ],
+  });
+  if (!edit) return;
+  Object.assign(ext, { title: edit.title, summary: edit.summary, core_idea: edit.core_idea, math: edit.math });
+  const response = await fetch(`/api/v1/operator/queue/${encodeURIComponent(id)}/edit`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-alchetron-operator-token": operatorToken },
+    body: JSON.stringify({
+      confirmation: edit.confirmation,
+      editor: edit.editor,
+      reason: edit.reason,
+      candidate_hash: item.candidate_hash,
+      normalized: ext,
+    }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) { showToast(body.error || "Candidate edit failed."); return; }
+  await loadCatalog();
+  closeHud();
+  showToast(`${id} private working state updated; revalidation required.`);
 }
 
 function paint() {
@@ -397,6 +513,14 @@ async function loadCatalog() {
 }
 
 document.querySelector("#hud-close")?.addEventListener("click", closeHud);
+document.querySelector("#action-close")?.addEventListener("click", () => closeAction());
+document.querySelector("#action-cancel")?.addEventListener("click", () => closeAction());
+document.querySelector("#action-dialog")?.addEventListener("cancel", (event) => { event.preventDefault(); closeAction(); });
+document.querySelector("#action-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+  closeAction(values);
+});
 document.querySelector("#archive-hud")?.addEventListener("click", (event) => {
   if (event.target.id === "archive-hud") closeHud();
 });

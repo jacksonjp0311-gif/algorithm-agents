@@ -1,0 +1,37 @@
+{
+  "version": "2026.08",
+  "cases": [
+    {
+      "id": "bellman-ford",
+      "fixture": "fixtures/shortest-path/bellman-ford.md",
+      "title_contains": "Bellman-Ford",
+      "domain": "Graph Algorithms",
+      "algorithm_present": true,
+      "expected_claims": ["O(V E)", "negative cycle", "d[v] = min(d[v], d[u] + w(u,v))"]
+    },
+    {
+      "id": "kalman-filter",
+      "fixture": "fixtures/state-estimation/kalman.md",
+      "title_contains": "Kalman",
+      "domain": "State Estimation",
+      "algorithm_present": true,
+      "expected_claims": ["predict", "update", "Gaussian"]
+    },
+    {
+      "id": "metropolis-hastings",
+      "fixture": "fixtures/sampling/metropolis-hastings.md",
+      "title_contains": "Metropolis",
+      "domain": "Monte Carlo",
+      "algorithm_present": true,
+      "expected_claims": ["accept", "proposal", "Markov"]
+    },
+    {
+      "id": "union-find",
+      "fixture": "fixtures/set-union/union-find.md",
+      "title_contains": "Disjoint-set union",
+      "domain": "Data Structures",
+      "algorithm_present": true,
+      "expected_claims": ["path compression", "union by rank", "disjoint"]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Shared relaxation motif across canonical procedures",
+  "thesis": "Two canonical algorithms may admit the same monotone relaxation structure under different domain assumptions.",
+  "confidence": 0.25,
+  "evidence": [{ "kind": "GRAPH_PATTERN", "note": "Replace with canonical node evidence" }],
+  "node_refs": [],
+  "proposed_by": "researcher@example",
+  "model": { "provider": "human", "model": "operator" },
+  "experiment": { "question": "Can a structure-preserving state mapping be constructed?" }
+}

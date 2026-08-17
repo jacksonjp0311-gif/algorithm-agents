@@ -5,19 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#041018">
   <title>Alchetron · Algorithm Intelligence Console</title>
-  <link rel="stylesheet" href="/css/styles.css?v=2">
+  <link rel="stylesheet" href="/css/styles.css?v=3">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 <div class="site-strip">ALCHETRON · ALCHEMY × CYBERNETICS</div>
 <header class="site-header">
   <div class="nav-shell">
-    <a class="brand-link" href="/"><span class="brand-mark"></span><span class="brand-wordmark"><strong>Algorithm</strong><span>Agents</span></span></a>
+    <a class="brand-link" href="/"><span class="brand-mark"></span><span class="brand-wordmark"><strong>Alchetron</strong><span>v2.0</span></span></a>
     <nav class="site-nav" aria-label="Sections">
       <a href="#dashboard">Dashboard</a>
       <a href="#graph">Nexus</a>
       <a href="#queue">Review</a>
-      <a href="#archive">Archive</a>
+      <a href="#emergent">Emergent</a>
+      <a href="#archive">Library</a>
     </nav>
   </div>
 </header>
@@ -29,6 +30,9 @@
       <p class="lede">A governed instrument for extracting computational knowledge, testing its evidence, and connecting only what a human has accepted into canon.</p>
       <div class="archive-metrics" id="archive-metrics"></div>
       <p class="operator-state" id="operator-state"></p>
+      <div class="trust-rail" id="trust-rail">
+        <span>Source snapshot</span><i></i><span>Claims</span><i></i><span>Verification</span><i></i><span>Human review</span><i></i><span>Canon</span>
+      </div>
     </div>
   </section>
   <section class="section" id="dashboard">
@@ -59,6 +63,37 @@
         <span id="graph-readout" class="meta-row"></span>
       </div>
       <div class="knowledge-stage"><canvas id="knowledge-canvas" aria-label="Interactive canonical knowledge graph"></canvas><div id="graph-inspector" class="graph-inspector">Select a node to inspect its canonical data.</div></div>
+    </div>
+  </section>
+  <section class="section emergent-section" id="emergent">
+    <div class="container">
+      <div class="section-head dashboard-heading">
+        <div>
+          <p class="eyebrow">Emergent intelligence</p>
+          <h2 class="section-title">Private hypothesis observatory</h2>
+          <p class="lede">Models and humans may connect canonical knowledge, challenge it, and design experiments here. Nothing crosses into canon without a separate human-governed review.</p>
+        </div>
+        <div class="button-row compact-actions">
+          <button class="button" id="new-hypothesis" type="button">Propose hypothesis</button>
+          <button class="button button-ghost" id="new-research-log" type="button">Write research log</button>
+          <button class="button button-ghost" id="scan-emergent" type="button">Scan missing links</button>
+        </div>
+      </div>
+      <div class="emergent-metrics" id="emergent-metrics"></div>
+      <div class="emergent-layout">
+        <section class="console-panel emergent-feed">
+          <div class="panel-title"><p class="eyebrow">Hypotheses</p><span>private → challenged → reviewed</span></div>
+          <div id="hypothesis-stream"></div>
+        </section>
+        <section class="console-panel emergent-feed">
+          <div class="panel-title"><p class="eyebrow">Research logs</p><span>AI and human field notes</span></div>
+          <div id="research-log-stream"></div>
+        </section>
+      </div>
+      <div class="console-grid emergent-support">
+        <section class="console-panel"><p class="eyebrow">Open disputes</p><div id="dispute-stream"></div></section>
+        <section class="console-panel"><p class="eyebrow">Evaluation record</p><div id="evaluation-stream"></div></section>
+      </div>
     </div>
   </section>
   <section class="section-tight">
@@ -112,8 +147,20 @@
   <button type="button" class="dialog-close" id="hud-close" aria-label="Close">×</button>
   <div id="hud-body"></div>
 </dialog>
+<dialog id="action-dialog" class="action-dialog" aria-labelledby="action-title">
+  <form method="dialog" id="action-form">
+    <button type="button" class="dialog-close" id="action-close" aria-label="Close">×</button>
+    <p class="eyebrow" id="action-kicker">Governed action</p>
+    <h2 id="action-title">Review</h2>
+    <p class="action-explainer" id="action-explainer"></p>
+    <div id="action-fields" class="action-fields"></div>
+    <p class="boundary-note" id="action-boundary">Agent and model actions cannot publish canon.</p>
+    <div class="button-row"><button class="button" id="action-submit" type="submit">Continue</button><button class="button button-ghost" id="action-cancel" type="button">Cancel</button></div>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <footer class="site-footer"><div class="container"><span>Agent output is proposal. Evidence is preserved. Human review controls canon.</span></div></footer>
-<script src="/js/app.js?v=2"></script>
-<script src="/js/console.js?v=2"></script>
+<script src="/js/app.js?v=3"></script>
+<script src="/js/console.js?v=3"></script>
 </body>
 </html>

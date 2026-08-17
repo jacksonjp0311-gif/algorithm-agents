@@ -72,6 +72,20 @@ enum Command {
     Session(SessionCmd),
     #[command(subcommand)]
     Graph(GraphCmd),
+    #[command(subcommand)]
+    Emergent(EmergentCmd),
+    #[command(subcommand)]
+    Model(ModelCmd),
+    #[command(subcommand)]
+    Eval(EvalCmd),
+    #[command(subcommand)]
+    Bundle(BundleCmd),
+    /// Check runtime, archive, graph, and registry integrity
+    Doctor,
+    /// Print machine-readable API, model, role, and MCP capabilities
+    Capabilities,
+    /// Run the Model Context Protocol server over stdio
+    Mcp,
     Run {
         agent: String,
         #[arg(long)]
@@ -186,7 +200,21 @@ enum SessionCmd {
 #[derive(Subcommand)]
 enum GraphCmd {
     Snapshot,
+    Ontology,
+    Integrity,
     Proposals,
+    Disputes,
+    OpenDispute {
+        #[arg(long)]
+        input: PathBuf,
+    },
+    ResolveDispute {
+        id: String,
+        #[arg(long)]
+        reviewer: Option<String>,
+        #[arg(long)]
+        resolution: String,
+    },
     Accept {
         id: String,
         #[arg(long)]
@@ -200,6 +228,81 @@ enum GraphCmd {
         reason: String,
         #[arg(long)]
         reviewer: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum EmergentCmd {
+    List,
+    Propose {
+        #[arg(long)]
+        input: PathBuf,
+    },
+    Challenge {
+        id: String,
+        #[arg(long)]
+        input: PathBuf,
+    },
+    Review {
+        id: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        reviewer: Option<String>,
+        #[arg(long)]
+        reject: bool,
+    },
+    Logs,
+    LogCreate {
+        #[arg(long)]
+        input: PathBuf,
+    },
+    LogReview {
+        id: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        reviewer: Option<String>,
+        #[arg(long)]
+        reject: bool,
+    },
+    Scan {
+        #[arg(long, default_value = "operator-requested-scanner")]
+        proposed_by: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ModelCmd {
+    Capabilities,
+    Invoke {
+        #[arg(long)]
+        input: PathBuf,
+    },
+    History,
+}
+
+#[derive(Subcommand)]
+enum EvalCmd {
+    Run,
+    History,
+}
+
+#[derive(Subcommand)]
+enum BundleCmd {
+    Export {
+        #[arg(long)]
+        output: PathBuf,
+    },
+    Inspect {
+        #[arg(long)]
+        input: PathBuf,
+    },
+    Import {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long, default_value = "operator import")]
+        source: String,
     },
 }
 
@@ -339,9 +442,43 @@ async fn main() -> anyhow::Result<()> {
         Command::Graph(GraphCmd::Snapshot) => {
             print_json(agent_system::graph::graph_snapshot(&runtime.pool, false).await?)
         }
+        Command::Graph(GraphCmd::Ontology) => print_json(agent_system::graph::ontology()),
+        Command::Graph(GraphCmd::Integrity) => {
+            print_json(agent_system::graph::integrity_report(&runtime.pool).await?)
+        }
         Command::Graph(GraphCmd::Proposals) => print_json(json!({
             "proposals": agent_system::graph::list_proposals(&runtime.pool).await?
         })),
+        Command::Graph(GraphCmd::Disputes) => print_json(json!({
+            "disputes": agent_system::graph::list_disputes(&runtime.pool).await?
+        })),
+        Command::Graph(GraphCmd::OpenDispute { input }) => {
+            let value = read_json_file(&input).await?;
+            print_json(serde_json::to_value(
+                agent_system::graph::open_dispute(
+                    &runtime.pool,
+                    required_json_string(&value, "target_type")?,
+                    required_json_string(&value, "target_id")?,
+                    required_json_string(&value, "claim")?,
+                    value.get("evidence").cloned().unwrap_or_else(|| json!([])),
+                    required_json_string(&value, "opened_by")?,
+                )
+                .await?,
+            )?)
+        }
+        Command::Graph(GraphCmd::ResolveDispute {
+            id,
+            reviewer,
+            resolution,
+        }) => print_json(serde_json::to_value(
+            agent_system::graph::resolve_dispute(
+                &runtime.pool,
+                &id,
+                &reviewer.unwrap_or_else(operator_name),
+                &resolution,
+            )
+            .await?,
+        )?),
         Command::Graph(GraphCmd::Accept {
             id,
             reason,
@@ -370,6 +507,114 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?,
         )?),
+        Command::Emergent(EmergentCmd::List) => print_json(json!({
+            "hypotheses": agent_system::emergent::list_hypotheses(&runtime.pool, true).await?
+        })),
+        Command::Emergent(EmergentCmd::Propose { input }) => {
+            let request = serde_json::from_value(read_json_file(&input).await?)?;
+            print_json(agent_system::emergent::propose_hypothesis(&runtime.pool, request).await?)
+        }
+        Command::Emergent(EmergentCmd::Challenge { id, input }) => {
+            let value = read_json_file(&input).await?;
+            print_json(
+                agent_system::emergent::challenge_hypothesis(
+                    &runtime.pool,
+                    &id,
+                    required_json_string(&value, "challenger")?,
+                    required_json_string(&value, "verdict")?,
+                    required_json_string(&value, "rationale")?,
+                    value.get("evidence").cloned().unwrap_or_else(|| json!([])),
+                )
+                .await?,
+            )
+        }
+        Command::Emergent(EmergentCmd::Review {
+            id,
+            reason,
+            reviewer,
+            reject,
+        }) => print_json(
+            agent_system::emergent::review_hypothesis(
+                &runtime.pool,
+                &id,
+                !reject,
+                &reviewer.unwrap_or_else(operator_name),
+                &reason,
+            )
+            .await?,
+        ),
+        Command::Emergent(EmergentCmd::Logs) => print_json(json!({
+            "logs": agent_system::emergent::list_research_logs(&runtime.pool, true).await?
+        })),
+        Command::Emergent(EmergentCmd::LogCreate { input }) => {
+            let request = serde_json::from_value(read_json_file(&input).await?)?;
+            print_json(agent_system::emergent::create_research_log(&runtime.pool, request).await?)
+        }
+        Command::Emergent(EmergentCmd::LogReview {
+            id,
+            reason,
+            reviewer,
+            reject,
+        }) => print_json(
+            agent_system::emergent::review_research_log(
+                &runtime.pool,
+                &id,
+                !reject,
+                &reviewer.unwrap_or_else(operator_name),
+                &reason,
+            )
+            .await?,
+        ),
+        Command::Emergent(EmergentCmd::Scan { proposed_by }) => print_json(json!({
+            "hypotheses": agent_system::emergent::scan_for_missing_links(&runtime.pool, &proposed_by).await?,
+            "canonical_publications": 0
+        })),
+        Command::Model(ModelCmd::Capabilities) => print_json(agent_system::model::capabilities()),
+        Command::Model(ModelCmd::Invoke { input }) => {
+            let request = serde_json::from_value(read_json_file(&input).await?)?;
+            print_json(serde_json::to_value(
+                agent_system::model::invoke(&runtime.pool, request).await?,
+            )?)
+        }
+        Command::Model(ModelCmd::History) => print_json(json!({
+            "invocations": agent_system::model::list_invocations(&runtime.pool).await?
+        })),
+        Command::Eval(EvalCmd::Run) => {
+            let report = agent_system::evaluation::run_corpus(&runtime.pool, &runtime.root).await?;
+            let passed = report.get("passed") == Some(&Value::Bool(true));
+            print_json(report);
+            if !passed {
+                std::process::exit(1);
+            }
+        }
+        Command::Eval(EvalCmd::History) => print_json(json!({
+            "evaluations": agent_system::evaluation::history(&runtime.pool).await?
+        })),
+        Command::Bundle(BundleCmd::Export { output }) => {
+            print_json(agent_system::bundle::export(&archive, &runtime.pool, &output).await?)
+        }
+        Command::Bundle(BundleCmd::Inspect { input }) => {
+            print_json(agent_system::bundle::inspect(&input).await?)
+        }
+        Command::Bundle(BundleCmd::Import { input, source }) => {
+            print_json(agent_system::bundle::import_private(&runtime.pool, &input, &source).await?)
+        }
+        Command::Doctor => print_json(json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "runtime": runtime.overview().await?,
+            "archive": archive.integrity_report().await?,
+            "graph": agent_system::graph::integrity_report(&runtime.pool).await?,
+            "registry_valid": runtime.registry.invalid.is_empty(),
+            "publication_boundary": "HUMAN_OPERATOR_ONLY"
+        })),
+        Command::Capabilities => print_json(json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "supervisor": agent_system::attach_contract(),
+            "models": agent_system::model::capabilities(),
+            "mcp": agent_system::mcp::descriptor(),
+            "graph": agent_system::graph::ontology()
+        })),
+        Command::Mcp => agent_system::mcp::serve(Arc::new(runtime)).await?,
         Command::Run {
             agent,
             session,
@@ -500,4 +745,17 @@ fn operator_name() -> String {
     std::env::var("USERNAME")
         .or_else(|_| std::env::var("USER"))
         .unwrap_or_else(|_| "operator".into())
+}
+
+async fn read_json_file(path: &std::path::Path) -> anyhow::Result<Value> {
+    let raw = tokio::fs::read_to_string(path).await?;
+    Ok(serde_json::from_str(&raw)?)
+}
+
+fn required_json_string<'a>(value: &'a Value, key: &str) -> anyhow::Result<&'a str> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("`{key}` is required"))
 }

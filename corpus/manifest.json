@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "status": "REFERENCE_FIXTURES_NOT_CANON",
+  "description": "Curated evidence fixtures used to demonstrate and evaluate Alchetron. Inclusion does not bypass candidate review.",
+  "domains": {
+    "Graph Algorithms": ["fixtures/shortest-path/bellman-ford.md", "fixtures/shortest-path/dijkstra.md"],
+    "State Estimation": ["fixtures/state-estimation/kalman.md", "fixtures/filtering/sir-particle.md"],
+    "Monte Carlo": ["fixtures/sampling/metropolis-hastings.md"],
+    "Optimization": ["fixtures/optimization/gradient-descent.md"],
+    "Data Structures": ["fixtures/set-union/union-find.md"],
+    "Numerical Methods": ["fixtures/numerical/newton.md"],
+    "Decoding": ["fixtures/decoding/viterbi.md"]
+  },
+  "governance": "Every fixture must still produce a private candidate and receive human review before canonical publication."
+}

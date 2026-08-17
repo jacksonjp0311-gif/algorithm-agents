@@ -348,3 +348,152 @@ async fn three_demos_and_restart() {
         "{restart}"
     );
 }
+
+#[test]
+fn evidence_claims_preserve_exact_source_spans() {
+    let source = "Bellman-Ford relaxes every edge and detects a negative cycle.";
+    let snapshot = agent_system::evidence::SourceSnapshot {
+        snapshot_id: "SRC-test".into(),
+        session_id: "RS-test".into(),
+        artifact_id: "ART-test".into(),
+        locator: "fixture://test".into(),
+        resolved: String::new(),
+        content_hash: "hash".into(),
+        bytes: source.len(),
+        captured_at: "now".into(),
+        path: String::new(),
+        text: source.into(),
+    };
+    let claims = agent_system::evidence::build_claim_records(
+        &json!({ "title": "Bellman-Ford", "summary": "detects a negative cycle" }),
+        &snapshot,
+    );
+    assert_eq!(claims.len(), 2);
+    assert!(claims.iter().all(|claim| !claim.evidence.is_empty()));
+    assert!(
+        claims
+            .iter()
+            .all(|claim| claim.epistemic_status == "SOURCE_STATED")
+    );
+}
+
+#[tokio::test]
+async fn evaluation_corpus_is_a_release_gate() {
+    let rt = runtime().await;
+    let report = agent_system::evaluation::run_corpus(&rt.pool, &rt.root)
+        .await
+        .unwrap();
+    assert_eq!(
+        report.get("passed").and_then(|value| value.as_bool()),
+        Some(true),
+        "{report}"
+    );
+}
+
+#[tokio::test]
+async fn emergent_objects_never_publish_canon() {
+    let rt = runtime().await;
+    let hypothesis = agent_system::emergent::propose_hypothesis(
+        &rt.pool,
+        agent_system::emergent::HypothesisInput {
+            session_id: String::new(),
+            title: "Test structural analogy".into(),
+            thesis: "Two procedures may share an invariant-preserving state transition.".into(),
+            confidence: 0.2,
+            evidence: json!([{ "kind": "TEST", "note": "fixture evidence" }]),
+            node_refs: Vec::new(),
+            proposed_by: "integration-test".into(),
+            model: json!({ "provider": "test", "model": "deterministic" }),
+            experiment: json!({ "question": "find a counterexample" }),
+        },
+    )
+    .await
+    .unwrap();
+    let id = hypothesis
+        .get("hypothesis_id")
+        .and_then(|value| value.as_str())
+        .unwrap();
+    let reviewed = agent_system::emergent::review_hypothesis(
+        &rt.pool,
+        id,
+        true,
+        "human-reviewer",
+        "retained as a reviewed research hypothesis",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        reviewed.get("state").and_then(|value| value.as_str()),
+        Some("REVIEWED")
+    );
+    assert_eq!(
+        reviewed
+            .get("canonical_publication")
+            .and_then(|value| value.as_bool()),
+        Some(false)
+    );
+}
+
+#[tokio::test]
+async fn research_logs_require_separate_public_review() {
+    let rt = runtime().await;
+    let log = agent_system::emergent::create_research_log(
+        &rt.pool,
+        agent_system::emergent::ResearchLogInput {
+            session_id: String::new(),
+            title: "Integration field note".into(),
+            body: "This substantive field note remains private until an explicit human review publishes it.".into(),
+            author_type: "MODEL".into(),
+            author_name: "integration-model".into(),
+            model: json!({ "provider": "test", "model": "integration" }),
+            sources: json!([]),
+            node_refs: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        log.get("state").and_then(|value| value.as_str()),
+        Some("PRIVATE")
+    );
+    assert!(
+        agent_system::emergent::list_research_logs(&rt.pool, false)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let id = log.get("log_id").and_then(|value| value.as_str()).unwrap();
+    agent_system::emergent::review_research_log(
+        &rt.pool,
+        id,
+        true,
+        "human-reviewer",
+        "appropriate public research field note",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        agent_system::emergent::list_research_logs(&rt.pool, false)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn model_and_mcp_capabilities_preserve_authority_boundary() {
+    let models = agent_system::model::capabilities();
+    assert_eq!(
+        models
+            .get("archive_authority")
+            .and_then(|value| value.as_bool()),
+        Some(false)
+    );
+    let mcp = agent_system::mcp::descriptor();
+    assert_eq!(
+        mcp.get("publication_tools_exposed")
+            .and_then(|value| value.as_bool()),
+        Some(false)
+    );
+}

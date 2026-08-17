@@ -17,6 +17,9 @@ Extract reconstructable computational procedures from fixtures, files the human 
 - Preserve UNCERTAIN and NEEDS_HUMAN. Do not smooth them away.
 - Model supervisors may propose graph relationships but may never approve them.
 - Use the versioned supervisor envelope when entering as an external model.
+- Use `algo mcp` when the host supports MCP; canonical review tools are intentionally absent.
+- Hypotheses and research logs begin PRIVATE. A reviewed hypothesis is still not canon.
+- Preserve source snapshot hashes and claim evidence spans when transforming candidates.
 
 ## Commands you actually run
 

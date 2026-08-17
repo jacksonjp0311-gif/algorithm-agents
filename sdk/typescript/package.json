@@ -1,0 +1,7 @@
+{
+  "name": "@alchetron/sdk",
+  "version": "2.0.0",
+  "type": "module",
+  "exports": "./src/index.js",
+  "description": "Zero-dependency client for the Alchetron v1 HTTP API"
+}

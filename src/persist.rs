@@ -20,6 +20,11 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "governed archive graph and supervisor audit",
         include_str!("../sql/migrations/0002-governance.sql"),
     ),
+    (
+        3,
+        "Alchetron v2 evidence models evaluation and emergence",
+        include_str!("../sql/migrations/0003-alchetron-v2.sql"),
+    ),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

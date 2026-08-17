@@ -4,7 +4,9 @@
 
 # Alchetron
 
-**Alchemy × cybernetics for governed algorithm extraction.** The binary remains `algo`; the system is Alchetron.
+**Alchemy × cybernetics for governed computational knowledge.** The binary remains `algo`; the system is Alchetron.
+
+Version 2.0 turns every extraction into an evidence package: immutable source snapshot, claim-level spans, specialist verification, private candidate, human decision, versioned canon, and a typed knowledge lattice.
 
 This is not a chatbot with extra steps.
 
@@ -119,6 +121,11 @@ Live retrieval is **off** until `--live` or an intent that clearly asks for the 
 | `algo archive history` | Canonical revisions and rollback targets |
 | `algo graph snapshot` | Canonical knowledge graph |
 | `algo supervisor` | Provider-neutral model entry contract |
+| `algo mcp` | MCP stdio server for capable models |
+| `algo model capabilities` | Direct OpenAI, Grok, local, and Codex entry surfaces |
+| `algo eval run` | Measured extraction regression corpus |
+| `algo emergent scan` | Private missing-link hypotheses; never auto-canonical |
+| `algo doctor` | Archive, graph, runtime, and registry integrity |
 | `algo ui` | Secured operator dashboard and interactive Nexus |
 | `algo smoke --process` | Compile every agent and the harvest path |
 
@@ -163,6 +170,11 @@ Operational references:
 - [`docs/operator.md`](docs/operator.md)
 - [`docs/archive-recovery.md`](docs/archive-recovery.md)
 - [`docs/supervisor-protocol.md`](docs/supervisor-protocol.md)
+- [`docs/api.md`](docs/api.md)
+- [`docs/mcp.md`](docs/mcp.md)
+- [`docs/evaluation.md`](docs/evaluation.md)
+- [`docs/emergent.md`](docs/emergent.md)
+- [`docs/distribution.md`](docs/distribution.md)
 
 ---
 

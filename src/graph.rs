@@ -6,7 +6,7 @@ use sqlx::{Row, SqlitePool};
 use crate::error::AgentError;
 use crate::host::PublishedAlgorithm;
 
-pub const RELATIONS: [&str; 10] = [
+pub const RELATIONS: [&str; 16] = [
     "DERIVED_FROM",
     "GENERALIZES",
     "SPECIALIZES",
@@ -17,6 +17,25 @@ pub const RELATIONS: [&str; 10] = [
     "CONTRADICTS",
     "VALIDATED_BY",
     "EXTRACTED_DURING",
+    "IMPLEMENTS",
+    "EVALUATES",
+    "DEPENDS_ON",
+    "ANALOGOUS_TO",
+    "HAS_ASSUMPTION",
+    "HAS_EXPERIMENT",
+];
+
+pub const NODE_KINDS: [&str; 10] = [
+    "ALGORITHM",
+    "THEORY",
+    "IMPLEMENTATION",
+    "DOMAIN",
+    "SOURCE",
+    "ASSUMPTION",
+    "EXPERIMENT",
+    "PERSON",
+    "DATASET",
+    "HYPOTHESIS",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +52,35 @@ pub struct RelationshipProposal {
     pub review_reason: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeDispute {
+    pub dispute_id: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub state: String,
+    pub claim: String,
+    pub evidence: Value,
+    pub opened_by: String,
+    pub resolved_by: String,
+    pub resolution: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+pub fn ontology() -> Value {
+    json!({
+        "version": "2.0",
+        "node_kinds": NODE_KINDS,
+        "relations": RELATIONS,
+        "rules": {
+            "canonical_edges_require_canonical_endpoints": true,
+            "proposals_require_evidence": true,
+            "model_approval_allowed": false,
+            "disputes_mutate_canon": false
+        }
+    })
 }
 
 pub async fn upsert_canonical_algorithm(
@@ -276,7 +324,163 @@ pub async fn graph_snapshot(pool: &SqlitePool, include_private: bool) -> Result<
             })
         })
         .collect::<Vec<_>>();
-    Ok(json!({ "nodes": nodes, "edges": edges }))
+    let disputes = list_disputes(pool).await?;
+    Ok(json!({
+        "ontology": ontology(),
+        "nodes": nodes,
+        "edges": edges,
+        "disputes": disputes.into_iter().filter(|item| include_private || item.state == "OPEN").collect::<Vec<_>>()
+    }))
+}
+
+pub async fn open_dispute(
+    pool: &SqlitePool,
+    target_type: &str,
+    target_id: &str,
+    claim: &str,
+    evidence: Value,
+    opened_by: &str,
+) -> Result<KnowledgeDispute, AgentError> {
+    if !matches!(target_type, "NODE" | "EDGE")
+        || target_id.trim().is_empty()
+        || claim.trim().len() < 8
+        || opened_by.trim().is_empty()
+        || evidence.as_array().is_none_or(Vec::is_empty)
+    {
+        return Err(AgentError::Invalid(
+            "disputes require NODE/EDGE target, claim, evidence, and opener".into(),
+        ));
+    }
+    let now = crate::persist::now_rfc3339()?;
+    let dispute = KnowledgeDispute {
+        dispute_id: format!("DSP-{}", uuid::Uuid::new_v4().simple()),
+        target_type: target_type.into(),
+        target_id: target_id.into(),
+        state: "OPEN".into(),
+        claim: claim.into(),
+        evidence,
+        opened_by: opened_by.into(),
+        resolved_by: String::new(),
+        resolution: String::new(),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    sqlx::query(
+        "INSERT INTO knowledge_disputes
+         (dispute_id, target_type, target_id, state, claim, evidence_json, opened_by,
+          resolved_by, resolution, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&dispute.dispute_id)
+    .bind(&dispute.target_type)
+    .bind(&dispute.target_id)
+    .bind(&dispute.state)
+    .bind(&dispute.claim)
+    .bind(serde_json::to_string(&dispute.evidence)?)
+    .bind(&dispute.opened_by)
+    .bind(&dispute.resolved_by)
+    .bind(&dispute.resolution)
+    .bind(&dispute.created_at)
+    .bind(&dispute.updated_at)
+    .execute(pool)
+    .await?;
+    Ok(dispute)
+}
+
+pub async fn resolve_dispute(
+    pool: &SqlitePool,
+    dispute_id: &str,
+    reviewer: &str,
+    resolution: &str,
+) -> Result<KnowledgeDispute, AgentError> {
+    if reviewer.trim().is_empty() || resolution.trim().len() < 8 {
+        return Err(AgentError::Invalid(
+            "dispute resolution requires reviewer and meaningful resolution".into(),
+        ));
+    }
+    let now = crate::persist::now_rfc3339()?;
+    let changed = sqlx::query(
+        "UPDATE knowledge_disputes SET state='RESOLVED', resolved_by=?, resolution=?, updated_at=?
+         WHERE dispute_id=? AND state='OPEN'",
+    )
+    .bind(reviewer)
+    .bind(resolution)
+    .bind(&now)
+    .bind(dispute_id)
+    .execute(pool)
+    .await?;
+    if changed.rows_affected() != 1 {
+        return Err(AgentError::State(format!(
+            "dispute `{dispute_id}` is missing or not open"
+        )));
+    }
+    get_dispute(pool, dispute_id).await
+}
+
+pub async fn list_disputes(pool: &SqlitePool) -> Result<Vec<KnowledgeDispute>, AgentError> {
+    let rows = sqlx::query("SELECT * FROM knowledge_disputes ORDER BY created_at DESC")
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.into_iter().map(dispute_from_row).collect())
+}
+
+async fn get_dispute(pool: &SqlitePool, dispute_id: &str) -> Result<KnowledgeDispute, AgentError> {
+    let row = sqlx::query("SELECT * FROM knowledge_disputes WHERE dispute_id=?")
+        .bind(dispute_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AgentError::NotFound(format!("dispute `{dispute_id}` not found")))?;
+    Ok(dispute_from_row(row))
+}
+
+fn dispute_from_row(row: sqlx::sqlite::SqliteRow) -> KnowledgeDispute {
+    KnowledgeDispute {
+        dispute_id: row.get("dispute_id"),
+        target_type: row.get("target_type"),
+        target_id: row.get("target_id"),
+        state: row.get("state"),
+        claim: row.get("claim"),
+        evidence: parse_json(row.get("evidence_json")),
+        opened_by: row.get("opened_by"),
+        resolved_by: row.get("resolved_by"),
+        resolution: row.get("resolution"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    }
+}
+
+pub async fn integrity_report(pool: &SqlitePool) -> Result<Value, AgentError> {
+    let missing_endpoints: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM knowledge_edges e
+         LEFT JOIN knowledge_nodes f ON f.node_id=e.from_node
+         LEFT JOIN knowledge_nodes t ON t.node_id=e.to_node
+         WHERE f.node_id IS NULL OR t.node_id IS NULL",
+    )
+    .fetch_one(pool)
+    .await?;
+    let noncanonical_endpoints: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM knowledge_edges e
+         JOIN knowledge_nodes f ON f.node_id=e.from_node
+         JOIN knowledge_nodes t ON t.node_id=e.to_node
+         WHERE e.canonical=1 AND (f.canonical=0 OR t.canonical=0)",
+    )
+    .fetch_one(pool)
+    .await?;
+    let rows = sqlx::query("SELECT relation FROM knowledge_edges")
+        .fetch_all(pool)
+        .await?;
+    let invalid_relations = rows
+        .into_iter()
+        .map(|row| row.get::<String, _>("relation"))
+        .filter(|relation| !RELATIONS.contains(&relation.as_str()))
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "valid": missing_endpoints == 0 && noncanonical_endpoints == 0 && invalid_relations.is_empty(),
+        "missing_endpoints": missing_endpoints,
+        "canonical_edges_with_private_endpoints": noncanonical_endpoints,
+        "invalid_relations": invalid_relations,
+        "ontology_version": "2.0"
+    }))
 }
 
 pub async fn list_proposals(pool: &SqlitePool) -> Result<Vec<RelationshipProposal>, AgentError> {

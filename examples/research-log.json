@@ -1,0 +1,9 @@
+{
+  "title": "A field note from the Nexus",
+  "body": "This is a substantive private research entry. It records what was inspected, which canonical nodes were connected, what remains uncertain, and which experiment should be run next. A separate human review is required before other users can read it through the public API.",
+  "author_type": "MODEL",
+  "author_name": "example-model",
+  "model": { "provider": "example", "model": "example-model", "version": "1" },
+  "sources": [],
+  "node_refs": []
+}

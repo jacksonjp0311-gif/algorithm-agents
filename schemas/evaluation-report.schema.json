@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alchetron Evaluation Report",
+  "type": "object",
+  "required": ["evaluation_id", "corpus_version", "runtime_version", "metrics", "cases", "passed"],
+  "properties": {
+    "evaluation_id": { "type": "string", "minLength": 1 },
+    "corpus_version": { "type": "string", "minLength": 1 },
+    "runtime_version": { "type": "string", "minLength": 1 },
+    "metrics": { "type": "object" },
+    "cases": { "type": "array" },
+    "passed": { "type": "boolean" }
+  }
+}

@@ -308,6 +308,73 @@ impl FileArchive {
         candidate_hash(&self.get_candidate(id).await?)
     }
 
+    pub async fn edit_candidate(
+        &self,
+        id: &str,
+        expected_hash: &str,
+        editor: &str,
+        reason: &str,
+        normalized: Value,
+    ) -> Result<QueuedCandidate, AgentError> {
+        if editor.trim().is_empty() || reason.trim().len() < 4 {
+            return Err(AgentError::Invalid(
+                "candidate edit requires editor and meaningful reason".into(),
+            ));
+        }
+        if !normalized.is_object()
+            || normalized
+                .get("title")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+        {
+            return Err(AgentError::Schema(
+                "edited candidate must remain an object with title".into(),
+            ));
+        }
+        let _operation = self.operation.lock().await;
+        let mut queue = read_json(&self.dir.join("queue.json"))
+            .await?
+            .unwrap_or(QueueFile {
+                next: 1,
+                items: Vec::new(),
+            });
+        let item = queue
+            .items
+            .iter_mut()
+            .find(|item| item.candidate_id.eq_ignore_ascii_case(id))
+            .ok_or_else(|| AgentError::NotFound(format!("candidate `{id}` not found")))?;
+        if matches!(item.review_state.as_str(), "ACCEPTED" | "REJECTED") {
+            return Err(AgentError::State(
+                "terminal candidates cannot be edited".into(),
+            ));
+        }
+        let current_hash = candidate_hash(item)?;
+        if expected_hash != current_hash {
+            return Err(AgentError::State(
+                "candidate changed after it was opened; reload before editing".into(),
+            ));
+        }
+        item.normalized = normalized;
+        item.review_state = "NEEDS_HUMAN".into();
+        item.review_notes = format!("Edited by {editor}: {reason}");
+        item.updated_at = now()?;
+        let edited = item.clone();
+        write_json(&self.dir.join("queue.json"), &queue).await?;
+        *self.queue.lock().await = queue;
+        self.append_archive_event(json!({
+            "event": "CANDIDATE_EDITED",
+            "candidate_id": edited.candidate_id,
+            "session_id": edited.session_id,
+            "editor": editor,
+            "reason": reason,
+            "new_candidate_hash": candidate_hash(&edited)?,
+            "canonical_changes": 0,
+            "created_at": now()?
+        }))
+        .await?;
+        Ok(edited)
+    }
+
     pub async fn revision_history(&self) -> Result<Vec<Value>, AgentError> {
         let dir = self.dir.join("revisions");
         if !dir.exists() {
@@ -328,6 +395,38 @@ impl FileArchive {
                 .cmp(&a.get("committed_at").and_then(Value::as_str))
         });
         Ok(revisions)
+    }
+
+    pub async fn integrity_report(&self) -> Result<Value, AgentError> {
+        let pointer = current_revision(&self.dir).await?;
+        let Some(pointer) = pointer else {
+            return Ok(json!({
+                "valid": true,
+                "state": "EMPTY",
+                "algorithm_count": self.published.lock().await.items.len()
+            }));
+        };
+        let revision_dir = self.dir.join("revisions").join(&pointer.revision_id);
+        let archive: ArchiveFile = read_json(&revision_dir.join("algorithms.json"))
+            .await?
+            .ok_or_else(|| AgentError::State("CURRENT revision payload is missing".into()))?;
+        let manifest: Value = read_json(&revision_dir.join("manifest.json"))
+            .await?
+            .ok_or_else(|| AgentError::State("CURRENT revision manifest is missing".into()))?;
+        let actual_hash = hash_json(&archive)?;
+        let manifest_hash = manifest
+            .get("canonical_hash")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        Ok(json!({
+            "valid": actual_hash == pointer.canonical_hash && actual_hash == manifest_hash,
+            "state": "CANONICAL",
+            "revision_id": pointer.revision_id,
+            "expected_hash": pointer.canonical_hash,
+            "manifest_hash": manifest_hash,
+            "actual_hash": actual_hash,
+            "algorithm_count": archive.items.len()
+        }))
     }
 
     pub async fn rollback(

@@ -1,0 +1,14 @@
+services:
+  alchetron:
+    build: .
+    ports:
+      - "127.0.0.1:8791:8791"
+    volumes:
+      - alchetron-data:/data
+    environment:
+      ALCHETRON_RESEARCHER_TOKEN: ${ALCHETRON_RESEARCHER_TOKEN:-}
+      ALCHETRON_REVIEWER_TOKEN: ${ALCHETRON_REVIEWER_TOKEN:-}
+    restart: unless-stopped
+
+volumes:
+  alchetron-data:

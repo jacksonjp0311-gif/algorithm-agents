@@ -20,6 +20,17 @@
     "source": { "type": "object" },
     "provenance": { "type": "object" },
     "publication": { "type": "object" },
+    "source_snapshot": {
+      "type": "object",
+      "properties": {
+        "snapshot_id": { "type": "string" },
+        "content_hash": { "type": "string" },
+        "locator": { "type": "string" },
+        "bytes": { "type": "integer" }
+      }
+    },
+    "claims": { "type": "array", "items": { "type": "object" } },
+    "run_manifest": { "type": "object" },
     "validation": {
       "type": "object",
       "required": ["status"],

@@ -1,6 +1,7 @@
 const consoleState = {
-  dashboard: { sessions: [], events: [], publication_receipts: [], relationship_proposals: [] },
-  graph: { nodes: [], edges: [] },
+  dashboard: { sessions: [], events: [], publication_receipts: [], relationship_proposals: [], hypotheses: [], research_logs: [], evaluations: [] },
+  emergent: { hypotheses: [], logs: [], disputes: [] },
+  graph: { nodes: [], edges: [], disputes: [] },
   scale: 1,
   offsetX: 0,
   offsetY: 0,
@@ -68,6 +69,57 @@ function renderDashboard() {
   }
   renderReceipts(receipts);
   renderRelationshipProposals(proposals);
+  renderEmergent();
+}
+
+function renderEmergent() {
+  const data = consoleToken ? consoleState.emergent : {
+    hypotheses: consoleState.dashboard.hypotheses || [],
+    logs: consoleState.dashboard.research_logs || [],
+    disputes: consoleState.graph.disputes || [],
+  };
+  const hypotheses = data.hypotheses || [];
+  const logs = data.logs || [];
+  const disputes = data.disputes || [];
+  const evaluations = consoleState.dashboard.evaluations || [];
+  const metrics = document.querySelector("#emergent-metrics");
+  if (metrics) {
+    metrics.innerHTML = [
+      ["Private hypotheses", hypotheses.filter((item) => item.state === "PRIVATE").length],
+      ["Reviewed hypotheses", hypotheses.filter((item) => item.state === "REVIEWED").length],
+      ["Public field logs", logs.filter((item) => item.state === "PUBLIC").length],
+      ["Open disputes", disputes.filter((item) => item.state === "OPEN").length],
+    ].map(([label, value]) => `<article class="dashboard-stat"><strong>${esc(value)}</strong><span>${esc(label)}</span></article>`).join("");
+  }
+  const hypothesisMount = document.querySelector("#hypothesis-stream");
+  if (hypothesisMount) {
+    hypothesisMount.innerHTML = hypotheses.length ? hypotheses.map((item) => `<article class="hypothesis-row">
+      <div class="panel-title"><p class="status-pill">${esc(item.state)}</p><span>${Math.round(Number(item.confidence || 0) * 100)}% confidence</span></div>
+      <h3>${esc(item.title)}</h3><p>${esc(item.thesis)}</p>
+      <p class="meta-row">${esc(item.hypothesis_id)} · proposed by ${esc(item.proposed_by)} · ${(item.node_refs || []).length} canonical refs</p>
+      <p class="meta-row">${(item.challenges || []).length} challenges · canonical publication: NEVER AUTOMATIC</p>
+      ${consoleToken && item.state === "PRIVATE" ? `<div class="button-row"><button class="button" data-hyp-review="${esc(item.hypothesis_id)}">Review</button><button class="button button-ghost" data-hyp-challenge="${esc(item.hypothesis_id)}">Challenge</button></div>` : ""}
+    </article>`).join("") : `<p class="empty-state">No hypotheses yet. Scan the graph or propose an evidence-backed connection.</p>`;
+  }
+  const logMount = document.querySelector("#research-log-stream");
+  if (logMount) {
+    logMount.innerHTML = logs.length ? logs.map((item) => `<article class="research-log-row">
+      <div class="panel-title"><p class="status-pill">${esc(item.state)}</p><span>${esc(item.author_type)}</span></div>
+      <h3>${esc(item.title)}</h3><p>${esc(clipConsole(item.body, 420))}</p>
+      <p class="meta-row">${esc(item.author_name)} · ${esc(compactDate(item.created_at))}</p>
+      ${consoleToken && item.state === "PRIVATE" ? `<button class="button button-ghost" data-log-review="${esc(item.log_id)}">Review field log</button>` : ""}
+    </article>`).join("") : `<p class="empty-state">No research logs have been written.</p>`;
+  }
+  const disputeMount = document.querySelector("#dispute-stream");
+  if (disputeMount) disputeMount.innerHTML = disputes.length ? disputes.map((item) => `<article class="dispute-row"><p class="status-pill">${esc(item.state)}</p><strong>${esc(item.target_id)}</strong><p>${esc(item.claim)}</p><small>${esc(item.opened_by)}</small></article>`).join("") : `<p class="empty-state">No disputes are open.</p>`;
+  const evaluationMount = document.querySelector("#evaluation-stream");
+  if (evaluationMount) evaluationMount.innerHTML = evaluations.length ? evaluations.map((item) => `<article class="evaluation-row"><p class="status-pill">${item.passed ? "PASS" : "FAIL"}</p><strong>${esc(item.evaluation_id)}</strong><p>${esc(item.corpus_version)} · runtime ${esc(item.runtime_version)}</p><small>${esc(compactDate(item.created_at))}</small></article>`).join("") : `<p class="empty-state">Run <code>algo eval run</code> to establish the measured baseline.</p>`;
+  bindEmergentActions();
+}
+
+function clipConsole(value, max) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length <= max ? text : `${text.slice(0, max).trim()}…`;
 }
 
 function renderReceipts(receipts) {
@@ -136,40 +188,196 @@ async function operatorPost(url, body) {
   return data;
 }
 
+async function operatorGet(url) {
+  if (!consoleToken) throw new Error("Operator token required.");
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: { "x-alchetron-operator-token": consoleToken },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Operator request failed.");
+  return data;
+}
+
 async function reviewRelationship(id, accept) {
-  const confirmation = window.prompt(`Type ${id} to confirm.`);
-  if (confirmation !== id) return;
-  const reviewer = window.prompt("Reviewer", "human-operator") || "";
-  const reason = window.prompt(accept ? "Why is this relation canonical?" : "Why reject this relation?") || "";
+  const decision = await window.openGovernedAction({
+    kicker: "Relationship governance",
+    title: `${accept ? "Accept" : "Reject"} ${id}`,
+    explainer: accept ? "Both endpoints must already be canonical. The edge will carry its evidence into the lattice." : "The proposal remains visible in the audit record.",
+    submitLabel: accept ? "Create canonical relation" : "Record rejection",
+    fields: [
+      { name: "confirmation", label: `Exact confirmation · ${id}` },
+      { name: "reviewer", label: "Human reviewer", value: "human-operator" },
+      { name: "reason", label: "Review reason", type: "textarea" },
+    ],
+  });
+  if (!decision) return;
   try {
-    await operatorPost(`/api/relationships/${encodeURIComponent(id)}/review`, {
-      confirmation,
-      reviewer,
-      reason,
+    await operatorPost(`/api/v1/operator/relationships/${encodeURIComponent(id)}/review`, {
+      confirmation: decision.confirmation,
+      reviewer: decision.reviewer,
+      reason: decision.reason,
       accept,
     });
     await loadConsoleData();
   } catch (error) {
-    window.alert(error.message);
+    showToast(error.message);
   }
 }
 
 async function rollbackRevision(revisionId) {
-  const confirmation = window.prompt(`Type ${revisionId} to confirm rollback.`);
-  if (confirmation !== revisionId) return;
-  const reviewer = window.prompt("Reviewer", "human-operator") || "";
-  const reason = window.prompt("Why is rollback necessary?") || "";
+  const decision = await window.openGovernedAction({
+    kicker: "Canonical recovery",
+    title: `Rollback to ${revisionId}`,
+    explainer: "CURRENT will point to this immutable revision. A rollback receipt records who restored it and why.",
+    submitLabel: "Restore immutable revision",
+    fields: [
+      { name: "confirmation", label: `Exact confirmation · ${revisionId}` },
+      { name: "reviewer", label: "Human operator", value: "human-operator" },
+      { name: "reason", label: "Recovery reason", type: "textarea" },
+    ],
+  });
+  if (!decision) return;
   try {
-    await operatorPost("/api/archive/rollback", {
+    await operatorPost("/api/v1/operator/archive/rollback", {
       revision_id: revisionId,
-      confirmation,
-      reviewer,
-      reason,
+      confirmation: decision.confirmation,
+      reviewer: decision.reviewer,
+      reason: decision.reason,
     });
     await Promise.all([loadCatalog(), loadConsoleData()]);
   } catch (error) {
-    window.alert(error.message);
+    showToast(error.message);
   }
+}
+
+function bindEmergentActions() {
+  document.querySelectorAll("[data-hyp-review]").forEach((button) => button.addEventListener("click", () => reviewHypothesis(button.dataset.hypReview)));
+  document.querySelectorAll("[data-hyp-challenge]").forEach((button) => button.addEventListener("click", () => challengeHypothesis(button.dataset.hypChallenge)));
+  document.querySelectorAll("[data-log-review]").forEach((button) => button.addEventListener("click", () => reviewResearchLog(button.dataset.logReview)));
+}
+
+async function reviewHypothesis(id) {
+  const decision = await window.openGovernedAction({
+    kicker: "Emergent review",
+    title: `Review ${id}`,
+    explainer: "Reviewing a hypothesis does not publish a canonical relation. It only marks the private research object as human-reviewed.",
+    submitLabel: "Record hypothesis review",
+    fields: [
+      { name: "confirmation", label: `Exact confirmation · ${id}` },
+      { name: "reviewer", label: "Human reviewer", value: "human-operator" },
+      { name: "reason", label: "Review reason", type: "textarea" },
+      { name: "accept", label: "Decision", type: "select", options: [{ value: "true", label: "Reviewed — retain" }, { value: "false", label: "Reject" }] },
+    ],
+  });
+  if (!decision) return;
+  try {
+    await operatorPost(`/api/v1/operator/hypotheses/${encodeURIComponent(id)}/review`, { ...decision, accept: decision.accept === "true" });
+    await loadConsoleData(); showToast(`${id} review recorded; canon unchanged.`);
+  } catch (error) { showToast(error.message); }
+}
+
+async function challengeHypothesis(id) {
+  const challenge = await window.openGovernedAction({
+    kicker: "Adversarial verification",
+    title: `Challenge ${id}`,
+    explainer: "Record a supporting result, counterexample, uncertainty, or unresolved contradiction.",
+    submitLabel: "Attach challenge",
+    fields: [
+      { name: "challenger", label: "Challenger identity", value: "human-operator" },
+      { name: "verdict", label: "Verdict", type: "select", options: ["CONTESTED", "REFUTED", "SUPPORTED", "UNKNOWN"].map((value) => ({ value, label: value })) },
+      { name: "rationale", label: "Rationale", type: "textarea" },
+      { name: "evidence", label: "Evidence JSON array", type: "textarea", value: "[]", required: false },
+    ],
+  });
+  if (!challenge) return;
+  try {
+    const evidence = JSON.parse(challenge.evidence || "[]");
+    await operatorPost(`/api/v1/research/hypotheses/${encodeURIComponent(id)}/challenge`, { ...challenge, evidence });
+    await loadConsoleData(); showToast(`Challenge attached to ${id}.`);
+  } catch (error) { showToast(error.message); }
+}
+
+async function reviewResearchLog(id) {
+  const decision = await window.openGovernedAction({
+    kicker: "Public research log boundary",
+    title: `Review ${id}`,
+    explainer: "Publishing makes the field log readable to other people and models. It does not make its ideas canonical truth.",
+    submitLabel: "Record log review",
+    fields: [
+      { name: "confirmation", label: `Exact confirmation · ${id}` },
+      { name: "reviewer", label: "Human reviewer", value: "human-operator" },
+      { name: "reason", label: "Review reason", type: "textarea" },
+      { name: "accept", label: "Decision", type: "select", options: [{ value: "true", label: "Publish field log" }, { value: "false", label: "Reject" }] },
+    ],
+  });
+  if (!decision) return;
+  try {
+    await operatorPost(`/api/v1/operator/logs/${encodeURIComponent(id)}/review`, { ...decision, accept: decision.accept === "true" });
+    await loadConsoleData(); showToast(`${id} review recorded.`);
+  } catch (error) { showToast(error.message); }
+}
+
+async function proposeHypothesis() {
+  const form = await window.openGovernedAction({
+    kicker: "Private synthesis",
+    title: "Propose an emergent hypothesis",
+    explainer: "Connect canonical nodes through an evidence-backed thesis. This enters PRIVATE state.",
+    submitLabel: "Create private hypothesis",
+    fields: [
+      { name: "title", label: "Hypothesis title" },
+      { name: "thesis", label: "Thesis", type: "textarea" },
+      { name: "confidence", label: "Confidence 0–1", type: "number", value: "0.25" },
+      { name: "node_refs", label: "Canonical node IDs · comma separated", required: false },
+      { name: "evidence", label: "Evidence JSON array", type: "textarea", value: "[{\"kind\":\"HUMAN_OBSERVATION\",\"note\":\"replace with evidence\"}]" },
+      { name: "proposed_by", label: "Proposer identity", value: "human-operator" },
+      { name: "experiment", label: "Experiment JSON", type: "textarea", value: "{}", required: false },
+    ],
+  });
+  if (!form) return;
+  try {
+    await operatorPost("/api/v1/research/hypotheses", {
+      title: form.title, thesis: form.thesis, confidence: Number(form.confidence),
+      node_refs: form.node_refs.split(",").map((item) => item.trim()).filter(Boolean),
+      evidence: JSON.parse(form.evidence), proposed_by: form.proposed_by,
+      model: { provider: "human", model: "operator" }, experiment: JSON.parse(form.experiment || "{}"),
+    });
+    await loadConsoleData(); showToast("Private hypothesis created.");
+  } catch (error) { showToast(error.message); }
+}
+
+async function writeResearchLog() {
+  const form = await window.openGovernedAction({
+    kicker: "AI + human field notes",
+    title: "Write a research log",
+    explainer: "Logs begin private. A separate human review can make them public to other users and models.",
+    submitLabel: "Save private field log",
+    fields: [
+      { name: "title", label: "Entry title" },
+      { name: "body", label: "Research entry", type: "textarea" },
+      { name: "author_type", label: "Author type", type: "select", options: ["HUMAN", "MODEL", "HYBRID"].map((value) => ({ value, label: value })) },
+      { name: "author_name", label: "Author/model identity", value: "human-operator" },
+      { name: "node_refs", label: "Canonical node IDs · comma separated", required: false },
+      { name: "sources", label: "Sources JSON array", type: "textarea", value: "[]", required: false },
+    ],
+  });
+  if (!form) return;
+  try {
+    await operatorPost("/api/v1/research/logs", {
+      title: form.title, body: form.body, author_type: form.author_type, author_name: form.author_name,
+      node_refs: form.node_refs.split(",").map((item) => item.trim()).filter(Boolean),
+      sources: JSON.parse(form.sources || "[]"), model: form.author_type === "MODEL" ? { provider: "declared", model: form.author_name } : {},
+    });
+    await loadConsoleData(); showToast("Private research log saved.");
+  } catch (error) { showToast(error.message); }
+}
+
+async function scanEmergent() {
+  if (!consoleToken) return showToast("Operator token required for a private scan.");
+  try {
+    const result = await operatorPost("/api/v1/operator/emergent/scan", { proposed_by: "missing-link-scanner@2.0" });
+    await loadConsoleData(); showToast(`${(result.hypotheses || []).length} private hypotheses created; canon unchanged.`);
+  } catch (error) { showToast(error.message); }
 }
 
 function initializeGraph() {
@@ -343,13 +551,15 @@ function renderGraphInspector(node) {
 }
 
 async function loadConsoleData() {
-  const [dashboardResponse, graphResponse] = await Promise.all([
+  const [dashboardResponse, graphResponse, emergentData] = await Promise.all([
     fetch("/api/dashboard", { cache: "no-store" }),
     fetch("/api/graph", { cache: "no-store" }),
+    consoleToken ? operatorGet("/api/v1/operator/emergent") : Promise.resolve(null),
   ]);
   if (!dashboardResponse.ok || !graphResponse.ok) throw new Error("Could not load Alchetron console data.");
   consoleState.dashboard = await dashboardResponse.json();
   consoleState.graph = await graphResponse.json();
+  if (emergentData) consoleState.emergent = emergentData;
   renderDashboard();
   initializeGraph();
 }
@@ -358,6 +568,9 @@ document.querySelector("#operator-state").textContent = consoleToken
   ? "OPERATOR AUTHORITY · ACTIVE IN THIS TAB"
   : "READ-ONLY VIEW · OPEN THE TOKENIZED OPERATOR URL TO REVIEW";
 document.querySelector("#refresh-dashboard")?.addEventListener("click", () => loadConsoleData().catch((error) => window.alert(error.message)));
+document.querySelector("#new-hypothesis")?.addEventListener("click", proposeHypothesis);
+document.querySelector("#new-research-log")?.addEventListener("click", writeResearchLog);
+document.querySelector("#scan-emergent")?.addEventListener("click", scanEmergent);
 bindGraph();
 loadConsoleData().catch((error) => {
   const mount = document.querySelector("#dashboard-metrics");

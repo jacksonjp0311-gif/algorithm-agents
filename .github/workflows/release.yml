@@ -4,6 +4,8 @@ on:
     tags: ["v*"]
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 jobs:
   build:
     strategy:
@@ -12,12 +14,15 @@ jobs:
           - os: windows-latest
             artifact: alchetron-windows-x86_64
             binary: target/release/algo.exe
+            release_file: alchetron-windows-x86_64.zip
           - os: ubuntu-latest
             artifact: alchetron-linux-x86_64
             binary: target/release/algo
+            release_file: alchetron-linux-x86_64.tar.gz
           - os: macos-latest
             artifact: alchetron-macos-host
             binary: target/release/algo
+            release_file: alchetron-macos-host.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +32,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked --all-targets
       - run: cargo build --locked --release --bin algo
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ matrix.binary }}
+      - name: Assemble runtime package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item '${{ matrix.binary }}' package/
+          Copy-Item web, registry, schemas, agents, fixtures, eval, sql, README.md, LICENSE -Destination package -Recurse
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path package/* -DestinationPath '${{ matrix.release_file }}'
+      - name: Package Unix
+        if: runner.os != 'Windows'
+        run: tar -czf '${{ matrix.release_file }}' -C package .
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.binary }}
+          path: ${{ matrix.release_file }}
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -38,6 +59,18 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+      - name: Normalize release filenames
+        run: |
+          cp dist/alchetron-windows-x86_64/alchetron-windows-x86_64.zip dist/
+          cp dist/alchetron-linux-x86_64/alchetron-linux-x86_64.tar.gz dist/
+          cp dist/alchetron-macos-host/alchetron-macos-host.tar.gz dist/
+          sha256sum dist/alchetron-windows-x86_64.zip dist/alchetron-linux-x86_64.tar.gz dist/alchetron-macos-host.tar.gz > dist/SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/**
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/alchetron-windows-x86_64.zip
+            dist/alchetron-linux-x86_64.tar.gz
+            dist/alchetron-macos-host.tar.gz
+            dist/SHA256SUMS
