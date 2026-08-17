@@ -13,6 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install pinned RustSec scanner
+        run: cargo +stable install cargo-audit --version 0.22.2 --locked
+      - name: Audit locked dependencies
+        run: cargo +stable audit
