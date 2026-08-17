@@ -9,6 +9,18 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use crate::error::AgentError;
 
 pub const SCHEMA_SQL: &str = include_str!("../sql/schema.sql");
+const MIGRATIONS: &[(i64, &str, &str)] = &[
+    (
+        1,
+        "initial runtime schema",
+        include_str!("../sql/migrations/0001-initial.sql"),
+    ),
+    (
+        2,
+        "governed archive graph and supervisor audit",
+        include_str!("../sql/migrations/0002-governance.sql"),
+    ),
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -108,29 +120,39 @@ pub async fn connect_sqlite(database_url: &str) -> Result<SqlitePool, AgentError
 
 pub async fn apply_schema(pool: &SqlitePool) -> Result<(), AgentError> {
     sqlx::raw_sql(SCHEMA_SQL).execute(pool).await?;
+    for (version, name, sql) in MIGRATIONS {
+        let applied: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM schema_migrations WHERE version = ?")
+                .bind(version)
+                .fetch_one(pool)
+                .await?;
+        if applied == 0 {
+            let mut transaction = pool.begin().await?;
+            sqlx::raw_sql(sql).execute(&mut *transaction).await?;
+            sqlx::query(
+                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+            )
+            .bind(version)
+            .bind(name)
+            .bind(now_rfc3339()?)
+            .execute(&mut *transaction)
+            .await?;
+            transaction.commit().await?;
+        }
+    }
     Ok(())
 }
 
 pub async fn next_id(pool: &SqlitePool, kind: &str, prefix: &str) -> Result<String, AgentError> {
-    let row = sqlx::query("SELECT next_value FROM agent_id_counters WHERE kind = ?")
-        .bind(kind)
-        .fetch_optional(pool)
-        .await?;
-    let next = if let Some(row) = row {
-        let current: i64 = row.get("next_value");
-        sqlx::query("UPDATE agent_id_counters SET next_value = ? WHERE kind = ?")
-            .bind(current + 1)
-            .bind(kind)
-            .execute(pool)
-            .await?;
-        current
-    } else {
-        sqlx::query("INSERT INTO agent_id_counters (kind, next_value) VALUES (?, 2)")
-            .bind(kind)
-            .execute(pool)
-            .await?;
-        1
-    };
+    let row = sqlx::query(
+        "INSERT INTO agent_id_counters (kind, next_value) VALUES (?, 2)
+         ON CONFLICT(kind) DO UPDATE SET next_value = agent_id_counters.next_value + 1
+         RETURNING next_value - 1 AS assigned",
+    )
+    .bind(kind)
+    .fetch_one(pool)
+    .await?;
+    let next: i64 = row.get("assigned");
     Ok(format!("{prefix}{next:04}"))
 }
 
@@ -331,7 +353,10 @@ pub async fn insert_message(pool: &SqlitePool, message: &AgentMessage) -> Result
     Ok(())
 }
 
-pub async fn list_messages(pool: &SqlitePool, session_id: &str) -> Result<Vec<AgentMessage>, AgentError> {
+pub async fn list_messages(
+    pool: &SqlitePool,
+    session_id: &str,
+) -> Result<Vec<AgentMessage>, AgentError> {
     let rows = sqlx::query("SELECT * FROM agent_messages WHERE session_id = ? ORDER BY created_at")
         .bind(session_id)
         .fetch_all(pool)
@@ -380,7 +405,10 @@ pub async fn insert_event(
     Ok(event)
 }
 
-pub async fn list_events(pool: &SqlitePool, session_id: &str) -> Result<Vec<AgentEvent>, AgentError> {
+pub async fn list_events(
+    pool: &SqlitePool,
+    session_id: &str,
+) -> Result<Vec<AgentEvent>, AgentError> {
     let rows = if session_id.is_empty() {
         sqlx::query("SELECT * FROM agent_events ORDER BY created_at")
             .fetch_all(pool)
@@ -411,18 +439,25 @@ pub async fn insert_artifact(
     data_dir: &Path,
     meta: &mut ArtifactMeta,
     content: &Value,
+    max_bytes: i64,
 ) -> Result<ArtifactMeta, AgentError> {
     let bytes = serde_json::to_vec_pretty(content)?;
-    if bytes.len() as i64 > 8_000_000 {
+    let effective_limit = max_bytes.clamp(1, 8_000_000);
+    if bytes.len() as i64 > effective_limit {
         return Err(AgentError::Budget("artifact exceeds hard size cap".into()));
     }
     meta.content_hash = format!("{:x}", Sha256::digest(&bytes));
     let dir = data_dir.join("artifacts").join(&meta.session_id);
     tokio::fs::create_dir_all(&dir).await?;
-    let path = dir.join(format!("{}.json", meta.artifact_id.replace([' ', '/'], "_")));
-    tokio::fs::write(&path, &bytes).await?;
+    let path = dir.join(format!(
+        "{}.json",
+        meta.artifact_id.replace([' ', '/'], "_")
+    ));
+    let tmp = path.with_extension("tmp.json");
+    tokio::fs::write(&tmp, &bytes).await?;
+    tokio::fs::rename(&tmp, &path).await?;
     meta.path = path.to_string_lossy().into_owned();
-    sqlx::query(
+    let inserted = sqlx::query(
         "INSERT INTO agent_artifacts (artifact_id, session_id, creator, agent_id, agent_version, type, created_at, content_hash, schema_version, path, provenance_json)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
@@ -438,11 +473,18 @@ pub async fn insert_artifact(
     .bind(&meta.path)
     .bind(serde_json::to_string(&meta.provenance_refs)?)
     .execute(pool)
-    .await?;
+    .await;
+    if let Err(error) = inserted {
+        let _ = tokio::fs::remove_file(&path).await;
+        return Err(AgentError::from(error));
+    }
     Ok(meta.clone())
 }
 
-pub async fn get_artifact(pool: &SqlitePool, artifact_id: &str) -> Result<(ArtifactMeta, Value), AgentError> {
+pub async fn get_artifact(
+    pool: &SqlitePool,
+    artifact_id: &str,
+) -> Result<(ArtifactMeta, Value), AgentError> {
     let row = sqlx::query("SELECT * FROM agent_artifacts WHERE artifact_id = ?")
         .bind(artifact_id)
         .fetch_optional(pool)
@@ -467,11 +509,15 @@ pub async fn get_artifact(pool: &SqlitePool, artifact_id: &str) -> Result<(Artif
     Ok((meta, content))
 }
 
-pub async fn list_artifacts(pool: &SqlitePool, session_id: &str) -> Result<Vec<ArtifactMeta>, AgentError> {
-    let rows = sqlx::query("SELECT * FROM agent_artifacts WHERE session_id = ? ORDER BY created_at")
-        .bind(session_id)
-        .fetch_all(pool)
-        .await?;
+pub async fn list_artifacts(
+    pool: &SqlitePool,
+    session_id: &str,
+) -> Result<Vec<ArtifactMeta>, AgentError> {
+    let rows =
+        sqlx::query("SELECT * FROM agent_artifacts WHERE session_id = ? ORDER BY created_at")
+            .bind(session_id)
+            .fetch_all(pool)
+            .await?;
     Ok(rows
         .iter()
         .map(|row| {
@@ -493,7 +539,11 @@ pub async fn list_artifacts(pool: &SqlitePool, session_id: &str) -> Result<Vec<A
         .collect())
 }
 
-pub async fn save_receipt(pool: &SqlitePool, session_id: &str, body: &Value) -> Result<String, AgentError> {
+pub async fn save_receipt(
+    pool: &SqlitePool,
+    session_id: &str,
+    body: &Value,
+) -> Result<String, AgentError> {
     let receipt_id = format!("REC-{session_id}");
     let created_at = now_rfc3339()?;
     sqlx::query(
@@ -516,6 +566,57 @@ pub async fn get_receipt(pool: &SqlitePool, session_id: &str) -> Result<Value, A
         .ok_or_else(|| AgentError::NotFound(format!("receipt for `{session_id}` not found")))?;
     let body: String = row.get("body_json");
     Ok(serde_json::from_str(&body)?)
+}
+
+pub async fn save_publication_receipt(pool: &SqlitePool, body: &Value) -> Result<(), AgentError> {
+    sqlx::query(
+        "INSERT INTO archive_publication_receipts
+         (receipt_id, candidate_id, session_id, revision_id, action, reviewer, reason,
+          candidate_hash, canonical_hash, body_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(required_json_str(body, "receipt_id")?)
+    .bind(json_str(body, "candidate_id"))
+    .bind(json_str(body, "session_id"))
+    .bind(required_json_str(body, "revision_id")?)
+    .bind(required_json_str(body, "action")?)
+    .bind(required_json_str(body, "reviewer")?)
+    .bind(required_json_str(body, "reason")?)
+    .bind(json_str(body, "candidate_hash"))
+    .bind(required_json_str(body, "canonical_hash")?)
+    .bind(serde_json::to_string(body)?)
+    .bind(required_json_str(body, "created_at")?)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn list_publication_receipts(pool: &SqlitePool) -> Result<Vec<Value>, AgentError> {
+    let rows =
+        sqlx::query("SELECT body_json FROM archive_publication_receipts ORDER BY created_at DESC")
+            .fetch_all(pool)
+            .await?;
+    rows.into_iter()
+        .map(|row| {
+            let raw: String = row.get("body_json");
+            serde_json::from_str(&raw).map_err(AgentError::from)
+        })
+        .collect()
+}
+
+fn json_str<'a>(value: &'a Value, key: &str) -> &'a str {
+    value.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+fn required_json_str<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentError> {
+    let field = json_str(value, key);
+    if field.is_empty() {
+        Err(AgentError::Invalid(format!(
+            "receipt field `{key}` is required"
+        )))
+    } else {
+        Ok(field)
+    }
 }
 
 pub fn default_data_dir(cwd: &Path) -> PathBuf {

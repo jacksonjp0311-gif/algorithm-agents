@@ -3,7 +3,10 @@ use serde_json::json;
 use super::{ExecContext, HandlerResult, extraction_skeleton, load_doc};
 use crate::error::AgentError;
 
-pub async fn deduplicator(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn deduplicator(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let published = ctx.runtime.host.list_published_algorithms().await?;
     let core = doc.equations.first().cloned().unwrap_or_default();
@@ -20,14 +23,20 @@ pub async fn deduplicator(ctx: &ExecContext<'_>, input: &serde_json::Value) -> R
     ))
 }
 
-pub async fn relationship_mapper(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn relationship_mapper(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let published = ctx.runtime.host.list_published_algorithms().await?;
     let related_algorithms: Vec<_> = published
         .iter()
         .filter(|item| {
             (!doc.domain.is_empty() && item.domain.eq_ignore_ascii_case(&doc.domain))
-                || item.tags.iter().any(|tag| doc.tags.iter().any(|mine| mine.eq_ignore_ascii_case(tag)))
+                || item
+                    .tags
+                    .iter()
+                    .any(|tag| doc.tags.iter().any(|mine| mine.eq_ignore_ascii_case(tag)))
         })
         .map(|item| json!({ "id": item.id, "title": item.title, "kind": "algorithm" }))
         .collect();
@@ -44,7 +53,10 @@ pub async fn relationship_mapper(ctx: &ExecContext<'_>, input: &serde_json::Valu
     ))
 }
 
-pub async fn structural_matcher(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn structural_matcher(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let motifs = if doc.motifs.is_empty() {
         infer_motifs(&doc)
@@ -62,7 +74,10 @@ pub async fn structural_matcher(ctx: &ExecContext<'_>, input: &serde_json::Value
     ))
 }
 
-pub async fn domain_classifier(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn domain_classifier(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let mut tags = doc.tags.clone();
     if tags.is_empty() && !doc.domain.is_empty() {
@@ -78,7 +93,10 @@ pub async fn domain_classifier(ctx: &ExecContext<'_>, input: &serde_json::Value)
     ))
 }
 
-pub async fn use_case_mapper(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn use_case_mapper(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     Ok(HandlerResult::complete(
         "EXTRACTION",
@@ -92,7 +110,13 @@ pub async fn use_case_mapper(ctx: &ExecContext<'_>, input: &serde_json::Value) -
 }
 
 fn infer_motifs(doc: &crate::parse::SourceDoc) -> Vec<String> {
-    let blob = format!("{} {} {}", doc.abstract_text, doc.pseudocode, doc.equations.join(" ")).to_ascii_lowercase();
+    let blob = format!(
+        "{} {} {}",
+        doc.abstract_text,
+        doc.pseudocode,
+        doc.equations.join(" ")
+    )
+    .to_ascii_lowercase();
     let mut motifs = Vec::new();
     if blob.contains("estimate") && blob.contains("correct") {
         motifs.push("observe → estimate → correct".into());

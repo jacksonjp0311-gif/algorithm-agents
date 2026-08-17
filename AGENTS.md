@@ -1,4 +1,4 @@
-# Algorithm Agents — instructions for the AI operator
+# Alchetron — instructions for the AI operator
 
 You entered a standalone extraction runtime. You are here to run agents that pull algorithms out of sources. You are not here to invent a field or publish a canon.
 
@@ -15,6 +15,8 @@ Extract reconstructable computational procedures from fixtures, files the human 
 - Do not silently edit `data/archive/`.
 - Keep SUPERVISOR AUTHORITY separate from ARCHIVE AUTHORITY.
 - Preserve UNCERTAIN and NEEDS_HUMAN. Do not smooth them away.
+- Model supervisors may propose graph relationships but may never approve them.
+- Use the versioned supervisor envelope when entering as an external model.
 
 ## Commands you actually run
 

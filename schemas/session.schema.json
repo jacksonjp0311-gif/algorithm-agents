@@ -1,3 +1,26 @@
 {
-  "type": "object"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alchetron Session",
+  "type": "object",
+  "required": ["session_id", "objective", "state", "supervisor", "created_at", "updated_at", "publication_allowed"],
+  "properties": {
+    "session_id": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "state": { "type": "string", "enum": ["CREATED", "ACTIVE", "PAUSED", "BLOCKED", "COMPLETE", "FAILED", "CANCELLED"] },
+    "supervisor": { "type": "string", "minLength": 1 },
+    "authorized_agents": { "type": "array", "items": { "type": "string" } },
+    "authorized_tools": { "type": "array", "items": { "type": "string" } },
+    "created_at": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "minLength": 1 },
+    "max_sources": { "type": "integer" },
+    "max_candidates": { "type": "integer" },
+    "max_agent_runs": { "type": "integer" },
+    "max_runtime_seconds": { "type": "integer" },
+    "max_retries": { "type": "integer" },
+    "max_artifact_bytes": { "type": "integer" },
+    "sources_used": { "type": "integer" },
+    "candidates_used": { "type": "integer" },
+    "agent_runs_used": { "type": "integer" },
+    "publication_allowed": { "type": "boolean", "enum": [false] }
+  }
 }

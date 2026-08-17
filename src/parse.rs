@@ -122,7 +122,11 @@ pub fn infer_document(raw: &str) -> SourceDoc {
     let mut doc = SourceDoc {
         body: text.clone(),
         complexity_origin: "UNKNOWN".into(),
-        source_type: if looks_html(raw) { "html".into() } else { "document".into() },
+        source_type: if looks_html(raw) {
+            "html".into()
+        } else {
+            "document".into()
+        },
         role: "primary".into(),
         ..SourceDoc::default()
     };
@@ -271,7 +275,10 @@ fn first_heading(text: &str) -> Option<String> {
                 return Some(name.to_owned());
             }
         }
-        if trimmed.len() > 3 && trimmed.len() < 160 && !trimmed.starts_with('{') && !is_chrome(trimmed)
+        if trimmed.len() > 3
+            && trimmed.len() < 160
+            && !trimmed.starts_with('{')
+            && !is_chrome(trimmed)
         {
             return Some(trimmed.to_owned());
         }
@@ -491,7 +498,10 @@ pub fn keyword_score(objective: &str, doc: &SourceDoc) -> u32 {
     .to_ascii_lowercase();
     objective
         .split_whitespace()
-        .map(|word| word.trim_matches(|ch: char| !ch.is_alphanumeric()).to_ascii_lowercase())
+        .map(|word| {
+            word.trim_matches(|ch: char| !ch.is_alphanumeric())
+                .to_ascii_lowercase()
+        })
         .filter(|word| word.len() > 3 && hay.contains(word.as_str()))
         .count() as u32
 }

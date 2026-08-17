@@ -17,6 +17,10 @@ pub struct Permissions {
     pub max_fetch_bytes: usize,
     #[serde(default = "default_fetch_timeout")]
     pub fetch_timeout_seconds: u64,
+    #[serde(default = "default_redirects")]
+    pub max_redirects: usize,
+    #[serde(default = "default_require_https")]
+    pub require_https: bool,
     #[serde(default = "default_user_agent")]
     pub user_agent: String,
     #[serde(default = "default_languages")]
@@ -37,6 +41,12 @@ fn default_fetch_timeout() -> u64 {
 }
 fn default_user_agent() -> String {
     "Algorithm-Agents/1.0 (local research extractor; +https://github.com)".into()
+}
+fn default_redirects() -> usize {
+    3
+}
+fn default_require_https() -> bool {
+    true
 }
 
 fn env_flag(name: &str) -> bool {
@@ -64,6 +74,8 @@ impl Default for Permissions {
             denied_hosts: Vec::new(),
             max_fetch_bytes: default_fetch_bytes(),
             fetch_timeout_seconds: default_fetch_timeout(),
+            max_redirects: default_redirects(),
+            require_https: default_require_https(),
             user_agent: default_user_agent(),
             code_languages: default_languages(),
             code_timeout_seconds: default_code_timeout(),

@@ -4,9 +4,15 @@ use crate::error::AgentError;
 use crate::persist;
 use crate::runtime::AgentRuntime;
 
-pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result<Value, AgentError> {
+pub async fn dispatch(
+    runtime: &AgentRuntime,
+    tool: &str,
+    args: Value,
+) -> Result<Value, AgentError> {
     if runtime.permissions.tool_globally_denied(tool) {
-        return Err(AgentError::Denied(format!("tool `{tool}` is globally denied")));
+        return Err(AgentError::Denied(format!(
+            "tool `{tool}` is globally denied"
+        )));
     }
     if tool == "publish_algorithm"
         || tool == "approve_extraction"
@@ -16,11 +22,18 @@ pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result
             "canonical publication tools are not available to the runtime".into(),
         ));
     }
+    let manifest = runtime.registry.get_tool(tool)?;
+    crate::schema::validate_against_schema(&manifest.args, &args)?;
     let session_id = args
         .get("session_id")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_owned();
+    if manifest.session_required && session_id.is_empty() {
+        return Err(AgentError::Invalid(format!(
+            "tool `{tool}` requires session_id"
+        )));
+    }
     if !session_id.is_empty() {
         let session = persist::get_session(&runtime.pool, &session_id).await?;
         if !session.authorized_tools.is_empty()
@@ -32,7 +45,8 @@ pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result
         }
     }
     if let Some(actor) = args.get("actor_agent").and_then(|v| v.as_str()) {
-        if let Ok(agent) = runtime.registry.get_agent(actor) {
+        {
+            let agent = runtime.registry.get_agent(actor)?;
             if agent.manifest.denied_tools.iter().any(|item| item == tool) {
                 return Err(AgentError::Denied(format!(
                     "agent `{actor}` is denied tool `{tool}`"
@@ -82,7 +96,8 @@ pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result
             Ok(serde_json::to_value(session)?)
         }
         "get_session" => {
-            let session = persist::get_session(&runtime.pool, required_str(&args, "session_id")?).await?;
+            let session =
+                persist::get_session(&runtime.pool, required_str(&args, "session_id")?).await?;
             Ok(serde_json::to_value(session)?)
         }
         "list_sessions" => {
@@ -107,19 +122,20 @@ pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result
                     required_str(&args, "from_agent")?,
                     required_str(&args, "to_agent")?,
                     required_str(&args, "type")?,
-                    args.get("artifact_id").and_then(|v| v.as_str()).unwrap_or(""),
+                    args.get("artifact_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(""),
                     args.get("payload").cloned().unwrap_or_else(|| json!({})),
                 )
                 .await?;
             Ok(serde_json::to_value(message)?)
         }
         "get_agent_messages" => {
-            let messages = persist::list_messages(&runtime.pool, required_str(&args, "session_id")?).await?;
+            let messages =
+                persist::list_messages(&runtime.pool, required_str(&args, "session_id")?).await?;
             Ok(json!({ "messages": messages }))
         }
-        "search_sources" => {
-            alias_run(runtime, &session_id, "source_scout", args).await
-        }
+        "search_sources" => alias_run(runtime, &session_id, "source_scout", args).await,
         "retrieve_source" => alias_run(runtime, &session_id, "web_collector", args).await,
         "inspect_document" => alias_run(runtime, &session_id, "paper_analyst", args).await,
         "inspect_repository" => alias_run(runtime, &session_id, "repository_scout", args).await,
@@ -133,16 +149,36 @@ pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result
         "verify_provenance" => alias_run(runtime, &session_id, "provenance_checker", args).await,
         "verify_math" => alias_run(runtime, &session_id, "math_checker", args).await,
         "verify_code" => alias_run(runtime, &session_id, "code_verifier", args).await,
-        "challenge_claims" => alias_run(runtime, &session_id, "hallucination_challenger", args).await,
+        "challenge_claims" => {
+            alias_run(runtime, &session_id, "hallucination_challenger", args).await
+        }
         "find_duplicates" => alias_run(runtime, &session_id, "deduplicator", args).await,
         "find_relationships" => alias_run(runtime, &session_id, "relationship_mapper", args).await,
-        "find_structural_matches" => alias_run(runtime, &session_id, "structural_matcher", args).await,
+        "find_structural_matches" => {
+            alias_run(runtime, &session_id, "structural_matcher", args).await
+        }
         "classify_domain" => alias_run(runtime, &session_id, "domain_classifier", args).await,
         "map_use_cases" => alias_run(runtime, &session_id, "use_case_mapper", args).await,
         "normalize_candidate" => alias_run(runtime, &session_id, "normalizer", args).await,
         "summarize_candidate" => alias_run(runtime, &session_id, "summarizer", args).await,
         "generate_reference_code" => alias_run(runtime, &session_id, "code_translator", args).await,
         "design_experiment" => alias_run(runtime, &session_id, "experiment_designer", args).await,
+        "propose_relationship" => Ok(serde_json::to_value(
+            crate::graph::propose_relationship(
+                &runtime.pool,
+                required_str(&args, "session_id")?,
+                required_str(&args, "from_node")?,
+                required_str(&args, "to_node")?,
+                required_str(&args, "relation")?,
+                args.get("evidence").cloned().unwrap_or_else(|| json!([])),
+                required_str(&args, "proposed_by")?,
+            )
+            .await?,
+        )?),
+        "list_relationship_proposals" => Ok(json!({
+            "proposals": crate::graph::list_proposals(&runtime.pool).await?
+        })),
+        "get_canonical_graph" => crate::graph::graph_snapshot(&runtime.pool, false).await,
         "submit_review_candidate" => {
             let normalized = args
                 .get("normalized")
@@ -175,13 +211,19 @@ pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result
             Ok(serde_json::to_value(session)?)
         }
         "get_session_events" => {
-            let events = persist::list_events(&runtime.pool, required_str(&args, "session_id")?).await?;
+            let events =
+                persist::list_events(&runtime.pool, required_str(&args, "session_id")?).await?;
             Ok(json!({ "events": events }))
         }
-        "get_session_receipt" => runtime.write_receipt(required_str(&args, "session_id")?).await,
+        "get_session_receipt" => {
+            runtime
+                .write_receipt(required_str(&args, "session_id")?)
+                .await
+        }
         "get_overview" => runtime.overview().await,
         "list_artifacts" => {
-            let artifacts = persist::list_artifacts(&runtime.pool, required_str(&args, "session_id")?).await?;
+            let artifacts =
+                persist::list_artifacts(&runtime.pool, required_str(&args, "session_id")?).await?;
             Ok(json!({ "artifacts": artifacts }))
         }
         "get_artifact" => {
@@ -190,7 +232,8 @@ pub async fn dispatch(runtime: &AgentRuntime, tool: &str, args: Value) -> Result
             Ok(json!({ "meta": meta, "content": content }))
         }
         "list_runs" => {
-            let runs = persist::list_runs(&runtime.pool, required_str(&args, "session_id")?).await?;
+            let runs =
+                persist::list_runs(&runtime.pool, required_str(&args, "session_id")?).await?;
             Ok(json!({ "runs": runs }))
         }
         other => Err(AgentError::NotFound(format!("unknown tool `{other}`"))),

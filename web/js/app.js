@@ -1,6 +1,14 @@
 let catalog = { accepted: [], queue: [] };
 let lastFocus = null;
 let domainFilter = "";
+const startupParams = new URLSearchParams(location.search);
+if (startupParams.get("operator_token")) {
+  sessionStorage.setItem("alchetron_operator_token", startupParams.get("operator_token"));
+  startupParams.delete("operator_token");
+  const cleanQuery = startupParams.toString();
+  history.replaceState({}, "", `${location.pathname}${cleanQuery ? `?${cleanQuery}` : ""}${location.hash}`);
+}
+const operatorToken = sessionStorage.getItem("alchetron_operator_token") || "";
 
 function esc(value) {
   return String(value ?? "")
@@ -17,7 +25,7 @@ function glowFor(item) {
   if (domain.includes("optim")) return "triad";
   if (domain.includes("numeric")) return "frost";
   if (domain.includes("monte") || domain.includes("sampl")) return "red";
-  if (item.status === "pending" || item.status === "rejected") return "vacant";
+  if (["pending", "needs_human", "blocked", "rejected"].includes(item.status)) return "vacant";
   return "alchemy";
 }
 
@@ -54,7 +62,8 @@ function clip(text, n) {
 
 function sourceHref(item) {
   const ext = extract(item);
-  return String(ext.source?.url || ext.source?.repository_url || "").trim();
+  const value = String(ext.source?.url || ext.source?.repository_url || "").trim();
+  return /^https?:\/\//i.test(value) ? value : "";
 }
 
 function cardHtml(item) {
@@ -70,16 +79,17 @@ function cardHtml(item) {
     ? `<ul class="software-tags">${tags.map((tag) => `<li>${esc(tag)}</li>`).join("")}</ul>`
     : "";
   const pending = item.status === "pending";
+  const contested = item.status === "needs_human" || item.status === "blocked";
   const rejected = item.status === "rejected";
   const href = sourceHref(item);
-  const actions = pending
+  const actions = pending || contested
     ? `<button type="button" class="button" data-open="${esc(item.id)}">Inspect</button>
       <div class="button-row">
         <button type="button" class="button button-ghost" data-accept="${esc(item.id)}">Accept</button>
         <button type="button" class="button button-ghost" data-reject="${esc(item.id)}">Reject</button>
       </div>`
     : `<button type="button" class="button" data-open="${esc(item.id)}">Inspect</button>`;
-  return `<article class="archive-card is-inspectable${pending ? " is-pending" : ""}${rejected ? " is-rejected" : ""}" data-glow="${glow}" data-id="${esc(item.id)}" data-open-card="${esc(item.id)}" tabindex="0">
+  return `<article class="archive-card is-inspectable${pending ? " is-pending" : ""}${contested ? " is-contested" : ""}${rejected ? " is-rejected" : ""}" data-glow="${glow}" data-id="${esc(item.id)}" data-open-card="${esc(item.id)}" tabindex="0">
     <p class="status-pill">${esc(item.status || "accepted")}</p>
     <p class="archive-id">${esc(item.archive_id)}</p>
     <h2>${esc(item.title || "Untitled")}</h2>
@@ -119,10 +129,12 @@ function renderMetrics() {
   const mount = document.querySelector("#archive-metrics");
   if (!mount) return;
   const pending = (catalog.queue || []).filter((item) => item.status === "pending").length;
+  const contested = (catalog.queue || []).filter((item) => ["needs_human", "blocked"].includes(item.status)).length;
   mount.innerHTML = `
     <div class="archive-metric-row">
       <span class="archive-metric"><strong>${(catalog.accepted || []).length}</strong> in the archive</span>
       <span class="archive-metric"><strong>${pending}</strong> awaiting review</span>
+      <span class="archive-metric"><strong>${contested}</strong> contested</span>
     </div>`;
 }
 
@@ -186,7 +198,7 @@ function bindCards(root) {
 function renderQueue() {
   const mount = document.querySelector("#queue-grid");
   if (!mount) return;
-  const items = filtered(catalog.queue || []).filter((item) => item.status !== "accepted");
+  const items = filtered(catalog.queue || []).filter((item) => item.status === "pending");
   if (!items.length) {
     mount.innerHTML = `<div class="empty-state">No candidates in the queue. Harvest or scrape a source, then it shows up here.</div>`;
     return;
@@ -220,6 +232,16 @@ function renderArchive() {
   bindCards(mount);
 }
 
+function renderContested() {
+  const mount = document.querySelector("#contested-grid");
+  if (!mount) return;
+  const items = filtered(catalog.queue || []).filter((item) => ["needs_human", "blocked"].includes(item.status));
+  mount.innerHTML = items.length
+    ? items.map(cardHtml).join("")
+    : `<div class="empty-state">No contested candidates. Uncertainty and failed gates will remain visible here.</div>`;
+  bindCards(mount);
+}
+
 function listHtml(items) {
   if (!items || !items.length) return "<p class='meta-row'>None listed.</p>";
   return `<ul>${items.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>`;
@@ -238,12 +260,14 @@ function openHud(id, origin) {
   const ext = extract(item);
   const sourceUrl = sourceHref(item);
   const pending = item.status === "pending";
+  const reviewable = pending || item.status === "needs_human" || item.status === "blocked";
   body.innerHTML = `
     <p class="eyebrow">Inspect · ${esc(item.archive_id)}</p>
     <h2 id="hud-title">${esc(item.title)}</h2>
     <p class="meta-row">${esc(item.domain || "Unsorted")} · ${esc(item.status).toUpperCase()}</p>
     <nav class="inspect-nav" aria-label="Inspect sections">
       <a href="#inspect-overview">Overview</a>
+      <a href="#inspect-verification">Verification</a>
       <a href="#inspect-math">Math</a>
       <a href="#inspect-code">Code</a>
       <a href="#inspect-source">Source</a>
@@ -253,6 +277,13 @@ function openHud(id, origin) {
       <p>${esc(ext.plain_language_explanation || item.summary || "No overview was extracted.")}</p>
       <p><strong>Core idea.</strong> ${esc(item.core_idea || ext.core_idea || "—")}</p>
       <p><strong>Why it matters.</strong> ${esc(ext.why_it_matters || "—")}</p>
+    </section>
+    <section id="inspect-verification"><h3>Verification</h3>
+      <p class="status-pill">${esc(ext.validation?.status || "UNVERIFIED")}</p>
+      <p><strong>Lifecycle.</strong> ${esc(ext.validation?.lifecycle || "DRAFT")}</p>
+      <p><strong>Mandatory gates.</strong> ${ext.validation?.mandatory_pass ? "Passed" : "Needs human judgment"}</p>
+      <pre>${esc(JSON.stringify(ext.validation?.gates || {}, null, 2))}</pre>
+      <p class="meta-row">Candidate hash ${esc(item.candidate_hash || "—")}</p>
     </section>
     <section id="inspect-math"><h3>Mathematics</h3>
       <pre>${esc(ext.math || item.core_idea || "No math field was extracted.")}</pre>
@@ -272,7 +303,7 @@ function openHud(id, origin) {
       ${sourceUrl ? `<p class="meta-row">${esc(sourceUrl)}</p>` : ""}
       <p>${esc(ext.provenance?.evidence_notes || "")}</p>
     </section>
-    ${pending ? `<div class="button-row inspect-decide">
+    ${reviewable ? `<div class="button-row inspect-decide">
       <button type="button" class="button" data-accept="${esc(item.id)}">Accept into archive</button>
       <button type="button" class="button button-ghost" data-reject="${esc(item.id)}">Reject</button>
     </div>` : ""}
@@ -290,7 +321,34 @@ function closeHud() {
 }
 
 async function accept(id) {
-  const response = await fetch(`/api/queue/${encodeURIComponent(id)}/accept`, { method: "POST" });
+  const item = findItem(id);
+  if (!item) return;
+  if (!operatorToken) {
+    window.alert("Open the operator URL printed by `algo ui`; a session token is required.");
+    return;
+  }
+  const confirmation = window.prompt(`Type ${id} to confirm canonical publication.`);
+  if (confirmation !== id) return;
+  const reviewer = window.prompt("Reviewer name", "human-operator") || "";
+  const reason = window.prompt("Why is this candidate ready for canon?") || "";
+  if (!reviewer.trim() || reason.trim().length < 4) {
+    window.alert("Reviewer and a meaningful reason are required.");
+    return;
+  }
+  const response = await fetch(`/api/queue/${encodeURIComponent(id)}/accept`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-alchetron-operator-token": operatorToken,
+    },
+    body: JSON.stringify({
+      confirmation,
+      reviewer,
+      reason,
+      candidate_hash: item.candidate_hash || "",
+      override_contested: item.status !== "pending",
+    }),
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: "Accept failed." }));
     window.alert(body.error || "Accept failed.");
@@ -300,10 +358,20 @@ async function accept(id) {
 }
 
 async function reject(id) {
+  if (!operatorToken) {
+    window.alert("Open the operator URL printed by `algo ui`; a session token is required.");
+    return;
+  }
+  const confirmation = window.prompt(`Type ${id} to confirm rejection.`);
+  if (confirmation !== id) return;
+  const reason = window.prompt("Why are you rejecting this candidate?", "insufficient evidence") || "";
   const response = await fetch(`/api/queue/${encodeURIComponent(id)}/reject`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ reason: "rejected from UI" }),
+    headers: {
+      "content-type": "application/json",
+      "x-alchetron-operator-token": operatorToken,
+    },
+    body: JSON.stringify({ reason, confirmation }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: "Reject failed." }));
@@ -317,6 +385,7 @@ function paint() {
   renderMetrics();
   renderChips();
   renderQueue();
+  renderContested();
   renderArchive();
 }
 
@@ -340,7 +409,7 @@ document.addEventListener("keydown", (event) => {
 
 loadCatalog()
   .then(() => {
-    const inspectId = new URLSearchParams(location.search).get("inspect");
+    const inspectId = startupParams.get("inspect");
     if (inspectId) openHud(inspectId, null);
   })
   .catch((error) => {

@@ -5,7 +5,10 @@ use crate::error::AgentError;
 use crate::parse::contains_claim;
 use crate::sandbox;
 
-pub async fn provenance_checker(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn provenance_checker(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, text) = load_doc(ctx, input).await?;
     let claims = collect_claims(input, &doc);
     let mut report = Vec::new();
@@ -30,9 +33,15 @@ pub async fn provenance_checker(ctx: &ExecContext<'_>, input: &serde_json::Value
             },
         )
     } else if unsupported > 0 {
-        ("LOW_CONFIDENCE", format!("{unsupported} claim(s) lack source support"))
+        (
+            "LOW_CONFIDENCE",
+            format!("{unsupported} claim(s) lack source support"),
+        )
     } else {
-        ("COMPLETE", "checked claims against the supplied source".into())
+        (
+            "COMPLETE",
+            "checked claims against the supplied source".into(),
+        )
     };
     Ok(HandlerResult::complete(
         "VERIFICATION_REPORT",
@@ -46,7 +55,10 @@ pub async fn provenance_checker(ctx: &ExecContext<'_>, input: &serde_json::Value
     .with_state(state))
 }
 
-pub async fn cross_source_verifier(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn cross_source_verifier(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let others = crate::collect::list_fixture_files(&ctx.runtime.root)?;
     let mut independent = Vec::new();
@@ -70,7 +82,10 @@ pub async fn cross_source_verifier(ctx: &ExecContext<'_>, input: &serde_json::Va
     ))
 }
 
-pub async fn math_checker(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn math_checker(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     if doc.equations.is_empty() {
         return Ok(HandlerResult::complete(
@@ -109,7 +124,10 @@ pub async fn math_checker(ctx: &ExecContext<'_>, input: &serde_json::Value) -> R
     ))
 }
 
-pub async fn code_verifier(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn code_verifier(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let language = input
         .get("language")
         .and_then(|v| v.as_str())
@@ -130,17 +148,27 @@ pub async fn code_verifier(ctx: &ExecContext<'_>, input: &serde_json::Value) -> 
         "FAIL" => "FAILED",
         _ => "COMPLETE",
     };
-    Ok(HandlerResult::complete("VERIFICATION_REPORT", report, &format!("code verifier: {result}"))
-        .with_state(state))
+    Ok(HandlerResult::complete(
+        "VERIFICATION_REPORT",
+        report,
+        &format!("code verifier: {result}"),
+    )
+    .with_state(state))
 }
 
-pub async fn hallucination_challenger(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn hallucination_challenger(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, text) = load_doc(ctx, input).await?;
     let mut challenges = Vec::new();
     if let Some(extraction) = input.get("extraction").or_else(|| input.get("claims")) {
         if let Some(obj) = extraction.as_object() {
-            for (key, value) in obj {
-                let claim = value.as_str().unwrap_or(&value.to_string()).to_owned();
+            for key in ["title", "summary", "core_idea", "math"] {
+                let Some(value) = obj.get(key) else { continue };
+                let Some(claim) = value.as_str().map(str::to_owned) else {
+                    continue;
+                };
                 if claim.trim().is_empty() {
                     continue;
                 }

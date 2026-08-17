@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::agents::{self, ExecContext, HandlerResult};
 use crate::error::AgentError;
@@ -25,7 +26,13 @@ pub const MESSAGE_TYPES: [&str; 9] = [
 ];
 
 pub const SESSION_STATES: [&str; 7] = [
-    "CREATED", "ACTIVE", "PAUSED", "BLOCKED", "COMPLETE", "FAILED", "CANCELLED",
+    "CREATED",
+    "ACTIVE",
+    "PAUSED",
+    "BLOCKED",
+    "COMPLETE",
+    "FAILED",
+    "CANCELLED",
 ];
 
 pub struct AgentRuntime {
@@ -114,12 +121,12 @@ impl AgentRuntime {
             authorized_tools: string_list(&args, "authorized_tools"),
             created_at: now.clone(),
             updated_at: now,
-            max_sources: int_or(&args, "max_sources", 8),
-            max_candidates: int_or(&args, "max_candidates", 4),
-            max_agent_runs: int_or(&args, "max_agent_runs", 40),
-            max_runtime_seconds: int_or(&args, "max_runtime_seconds", 1800),
-            max_retries: int_or(&args, "max_retries", 2),
-            max_artifact_bytes: int_or(&args, "max_artifact_bytes", 250_000),
+            max_sources: positive_or(&args, "max_sources", 8, 1_000),
+            max_candidates: positive_or(&args, "max_candidates", 4, 1_000),
+            max_agent_runs: positive_or(&args, "max_agent_runs", 40, 10_000),
+            max_runtime_seconds: positive_or(&args, "max_runtime_seconds", 1800, 86_400),
+            max_retries: nonnegative_or(&args, "max_retries", 2, 10),
+            max_artifact_bytes: positive_or(&args, "max_artifact_bytes", 250_000, 8_000_000),
             sources_used: 0,
             candidates_used: 0,
             agent_runs_used: 0,
@@ -128,6 +135,7 @@ impl AgentRuntime {
         if session.objective.is_empty() {
             return Err(AgentError::Invalid("session objective is required".into()));
         }
+        self.validate_named_schema("session.schema.json", &serde_json::to_value(&session)?)?;
         persist::insert_session(&self.pool, &session).await?;
         persist::insert_event(
             &self.pool,
@@ -146,9 +154,15 @@ impl AgentRuntime {
         Ok(session)
     }
 
-    pub async fn set_session_state(&self, session_id: &str, state: &str) -> Result<Session, AgentError> {
+    pub async fn set_session_state(
+        &self,
+        session_id: &str,
+        state: &str,
+    ) -> Result<Session, AgentError> {
         if !SESSION_STATES.contains(&state) {
-            return Err(AgentError::Invalid(format!("unknown session state {state}")));
+            return Err(AgentError::Invalid(format!(
+                "unknown session state {state}"
+            )));
         }
         let mut session = persist::get_session(&self.pool, session_id).await?;
         session.state = state.to_owned();
@@ -169,7 +183,12 @@ impl AgentRuntime {
         Ok(session)
     }
 
-    pub async fn run_agent(&self, session_id: &str, agent_id: &str, input: Value) -> Result<AgentRun, AgentError> {
+    pub async fn run_agent(
+        &self,
+        session_id: &str,
+        agent_id: &str,
+        input: Value,
+    ) -> Result<AgentRun, AgentError> {
         let mut session = persist::get_session(&self.pool, session_id).await?;
         if session.state != "ACTIVE" {
             return Err(AgentError::State(format!(
@@ -180,12 +199,23 @@ impl AgentRuntime {
         if session.agent_runs_used >= session.max_agent_runs {
             return Err(AgentError::Budget("max_agent_runs exhausted".into()));
         }
+        if session_elapsed_seconds(&session)? >= session.max_runtime_seconds {
+            return Err(AgentError::Budget("max_runtime_seconds exhausted".into()));
+        }
+        if agent_id == "web_collector" && session.sources_used >= session.max_sources {
+            return Err(AgentError::Budget("max_sources exhausted".into()));
+        }
         let loaded = self.registry.get_agent(agent_id)?;
         if !loaded.manifest.enabled {
-            return Err(AgentError::Denied(format!("agent `{agent_id}` is disabled")));
+            return Err(AgentError::Denied(format!(
+                "agent `{agent_id}` is disabled"
+            )));
         }
         if !session.authorized_agents.is_empty()
-            && !session.authorized_agents.iter().any(|item| item == agent_id)
+            && !session
+                .authorized_agents
+                .iter()
+                .any(|item| item == agent_id)
         {
             return Err(AgentError::Denied(format!(
                 "agent `{agent_id}` is not authorized for this session"
@@ -234,15 +264,54 @@ impl AgentRuntime {
             agent_id,
             agent_version: &loaded.manifest.version,
         };
-        let handled = match agents::execute(&ctx, &input).await {
-            Ok(result) => result,
-            Err(error) => HandlerResult {
-                state: "FAILED".into(),
-                reason: error.to_string(),
-                output: error.to_json(),
-                artifact_type: "VERIFICATION_REPORT".into(),
-                messages: Vec::new(),
-            },
+        let remaining = session
+            .max_runtime_seconds
+            .saturating_sub(session_elapsed_seconds(&session)?)
+            .max(1) as u64;
+        let timeout_seconds = loaded.manifest.timeout_seconds.max(1).min(remaining);
+        let attempts = loaded
+            .manifest
+            .max_retries
+            .min(session.max_retries.max(0) as u32)
+            + 1;
+        let mut attempt = 0;
+        let mut handled = loop {
+            attempt += 1;
+            let execution = tokio::time::timeout(
+                std::time::Duration::from_secs(timeout_seconds),
+                agents::execute(&ctx, &input),
+            )
+            .await;
+            match execution {
+                Ok(Ok(result)) => break result,
+                Ok(Err(error)) if attempt < attempts => {
+                    persist::insert_event(
+                        &self.pool,
+                        session_id,
+                        "AGENT_RETRY",
+                        json!({ "run_id": run.run_id, "attempt": attempt, "reason": error.to_string() }),
+                    )
+                    .await?;
+                }
+                Ok(Err(error)) => {
+                    break HandlerResult {
+                        state: "FAILED".into(),
+                        reason: error.to_string(),
+                        output: error.to_json(),
+                        artifact_type: "VERIFICATION_REPORT".into(),
+                        messages: Vec::new(),
+                    };
+                }
+                Err(_) => {
+                    break HandlerResult {
+                        state: "FAILED".into(),
+                        reason: format!("agent timed out after {timeout_seconds}s"),
+                        output: json!({ "error": "agent timeout", "timeout_seconds": timeout_seconds }),
+                        artifact_type: "VERIFICATION_REPORT".into(),
+                        messages: Vec::new(),
+                    };
+                }
+            }
         };
 
         if handled.state != "FAILED" {
@@ -280,7 +349,14 @@ impl AgentRuntime {
                 .map(|id| vec![id.to_owned()])
                 .unwrap_or_default(),
         };
-        persist::insert_artifact(&self.pool, &self.data_dir, &mut meta, &handled.output).await?;
+        persist::insert_artifact(
+            &self.pool,
+            &self.data_dir,
+            &mut meta,
+            &handled.output,
+            session.max_artifact_bytes,
+        )
+        .await?;
         persist::insert_event(
             &self.pool,
             session_id,
@@ -290,7 +366,7 @@ impl AgentRuntime {
         .await?;
 
         for pending in handled.messages {
-            let _ = self
+            if let Err(error) = self
                 .send_message(
                     session_id,
                     agent_id,
@@ -303,7 +379,11 @@ impl AgentRuntime {
                     },
                     pending.payload,
                 )
-                .await;
+                .await
+            {
+                handled.state = "FAILED".into();
+                handled.reason = format!("inter-agent message persistence failed: {error}");
+            }
         }
 
         run.artifact_id = meta.artifact_id.clone();
@@ -314,7 +394,7 @@ impl AgentRuntime {
         persist::update_run(&self.pool, &run).await?;
 
         session.agent_runs_used += 1;
-        if agent_id == "source_scout" || agent_id == "web_collector" {
+        if agent_id == "web_collector" {
             session.sources_used += 1;
         }
         session.updated_at = persist::now_rfc3339()?;
@@ -361,7 +441,11 @@ impl AgentRuntime {
         self.registry.get_agent(to_agent)?;
         let from = self.registry.get_agent(from_agent)?;
         if !from.manifest.can_message.is_empty()
-            && !from.manifest.can_message.iter().any(|item| item == to_agent)
+            && !from
+                .manifest
+                .can_message
+                .iter()
+                .any(|item| item == to_agent)
         {
             return Err(AgentError::Denied(format!(
                 "`{from_agent}` is not allowed to message `{to_agent}`"
@@ -378,6 +462,7 @@ impl AgentRuntime {
             payload,
             created_at: persist::now_rfc3339()?,
         };
+        self.validate_named_schema("message.schema.json", &serde_json::to_value(&message)?)?;
         persist::insert_message(&self.pool, &message).await?;
         persist::insert_event(
             &self.pool,
@@ -406,9 +491,11 @@ impl AgentRuntime {
         }
         if session.publication_allowed {
             return Err(AgentError::Denied(
-                "publication_allowed must remain false; candidates go to private review only".into(),
+                "publication_allowed must remain false; candidates go to private review only"
+                    .into(),
             ));
         }
+        self.validate_named_schema("extraction.schema.json", &normalized)?;
         let published = self.host.list_published_algorithms().await?;
         let title = normalized
             .get("title")
@@ -443,8 +530,14 @@ impl AgentRuntime {
         let submitted = self
             .host
             .submit_extraction_candidate(crate::host::ReviewCandidate {
+                session_id: session_id.to_owned(),
                 raw_extraction: raw.to_owned(),
                 normalized: normalized.clone(),
+                review_state: candidate_review_state(&normalized).to_owned(),
+                verification: normalized
+                    .get("validation")
+                    .cloned()
+                    .unwrap_or_else(|| json!({ "status": "NEEDS_HUMAN" })),
             })
             .await?;
         session.candidates_used += 1;
@@ -497,6 +590,7 @@ impl AgentRuntime {
             "canonical_publications": 0,
             "agent_versions": versions
         });
+        self.validate_named_schema("receipt.schema.json", &body)?;
         persist::save_receipt(&self.pool, session_id, &body).await?;
         persist::insert_event(
             &self.pool,
@@ -541,6 +635,29 @@ impl AgentRuntime {
             "needs_human": needs_human
         }))
     }
+
+    fn validate_named_schema(&self, name: &str, value: &Value) -> Result<(), AgentError> {
+        let schema = crate::schema::load_json_file(&self.root.join("schemas").join(name))?;
+        validate_against_schema(&schema, value)
+    }
+}
+
+fn candidate_review_state(normalized: &Value) -> &'static str {
+    match normalized
+        .pointer("/validation/status")
+        .and_then(Value::as_str)
+        .unwrap_or("NEEDS_HUMAN")
+    {
+        "VERIFIED" | "REVIEW_READY" => "PENDING",
+        "FAILED" | "BLOCKED" => "BLOCKED",
+        _ => "NEEDS_HUMAN",
+    }
+}
+
+fn session_elapsed_seconds(session: &Session) -> Result<i64, AgentError> {
+    let created = OffsetDateTime::parse(&session.created_at, &Rfc3339)
+        .map_err(|error| AgentError::State(format!("invalid session clock: {error}")))?;
+    Ok((OffsetDateTime::now_utc() - created).whole_seconds().max(0))
 }
 
 fn string_list(args: &Value, key: &str) -> Vec<String> {
@@ -555,6 +672,16 @@ fn string_list(args: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn int_or(args: &Value, key: &str, default: i64) -> i64 {
-    args.get(key).and_then(|v| v.as_i64()).unwrap_or(default)
+fn positive_or(args: &Value, key: &str, default: i64, maximum: i64) -> i64 {
+    args.get(key)
+        .and_then(|v| v.as_i64())
+        .unwrap_or(default)
+        .clamp(1, maximum)
+}
+
+fn nonnegative_or(args: &Value, key: &str, default: i64, maximum: i64) -> i64 {
+    args.get(key)
+        .and_then(|v| v.as_i64())
+        .unwrap_or(default)
+        .clamp(0, maximum)
 }

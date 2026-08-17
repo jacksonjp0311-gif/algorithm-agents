@@ -1,3 +1,16 @@
 {
-  "type": "object"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alchetron Agent Message",
+  "type": "object",
+  "required": ["message_id", "session_id", "from_agent", "to_agent", "type", "payload", "created_at"],
+  "properties": {
+    "message_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "from_agent": { "type": "string", "minLength": 1 },
+    "to_agent": { "type": "string", "minLength": 1 },
+    "type": { "type": "string", "enum": ["ANALYSIS_REQUEST", "ANALYSIS_RESULT", "VERIFICATION_REQUEST", "VERIFICATION_RESULT", "CLARIFICATION_REQUEST", "CLARIFICATION_RESULT", "ARTIFACT_REFERENCE", "BLOCKED_NOTICE", "LOW_CONFIDENCE_NOTICE"] },
+    "artifact_id": { "type": "string" },
+    "payload": { "type": "object" },
+    "created_at": { "type": "string", "minLength": 1 }
+  }
 }

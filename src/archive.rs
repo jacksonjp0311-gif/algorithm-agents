@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use sqlx::SqlitePool;
 use tokio::sync::Mutex;
 
 use crate::error::AgentError;
@@ -11,12 +13,16 @@ use crate::host::{ArchiveHost, PublishedAlgorithm, ReviewCandidate, SubmittedCan
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuedCandidate {
     pub candidate_id: String,
+    #[serde(default)]
+    pub session_id: String,
     pub review_state: String,
     pub review_notes: String,
     pub created_at: String,
     pub updated_at: String,
     pub raw_extraction: String,
     pub normalized: Value,
+    #[serde(default)]
+    pub verification: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -30,10 +36,30 @@ struct ArchiveFile {
     items: Vec<PublishedAlgorithm>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewDecision {
+    pub reviewer: String,
+    pub reason: String,
+    #[serde(default)]
+    pub expected_candidate_hash: String,
+    #[serde(default)]
+    pub override_contested: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CurrentRevision {
+    revision_id: String,
+    previous_revision_id: String,
+    canonical_hash: String,
+    committed_at: String,
+}
+
 pub struct FileArchive {
     dir: PathBuf,
     queue: Mutex<QueueFile>,
     published: Mutex<ArchiveFile>,
+    operation: Mutex<()>,
+    audit_pool: Option<SqlitePool>,
 }
 
 impl FileArchive {
@@ -47,14 +73,19 @@ impl FileArchive {
                 next: 1,
                 items: Vec::new(),
             });
-        let published = read_json(&dir.join("algorithms.json"))
-            .await?
-            .unwrap_or_default();
+        let published = read_current_archive(&dir).await?;
         Ok(Self {
             dir,
             queue: Mutex::new(queue),
             published: Mutex::new(published),
+            operation: Mutex::new(()),
+            audit_pool: None,
         })
+    }
+
+    pub fn with_audit_pool(mut self, pool: SqlitePool) -> Self {
+        self.audit_pool = Some(pool);
+        self
     }
 
     pub async fn list_queue(&self) -> Vec<QueuedCandidate> {
@@ -72,9 +103,7 @@ impl FileArchive {
                 next: 1,
                 items: Vec::new(),
             });
-        let published = read_json(&self.dir.join("algorithms.json"))
-            .await?
-            .unwrap_or_default();
+        let published = read_current_archive(&self.dir).await?;
         *self.queue.lock().await = queue;
         *self.published.lock().await = published;
         Ok(())
@@ -85,7 +114,7 @@ impl FileArchive {
         let published = self.published.lock().await.items.clone();
         let mut accepted = Vec::new();
         for item in published {
-            let extraction = read_json(&self.dir.join("accepted").join(format!("{}.json", item.id)))
+            let extraction = read_accepted_detail(&self.dir, &item.id)
                 .await?
                 .unwrap_or_else(|| serde_json::to_value(&item).unwrap_or(Value::Null));
             accepted.push(catalog_from_published(item, extraction));
@@ -113,42 +142,145 @@ impl FileArchive {
     }
 
     pub async fn accept(&self, id: &str) -> Result<PublishedAlgorithm, AgentError> {
-        self.reload().await?;
-        let mut queue = self.queue.lock().await;
+        self.accept_with_review(
+            id,
+            ReviewDecision {
+                reviewer: "cli-operator".into(),
+                reason: "explicit CLI acceptance".into(),
+                expected_candidate_hash: String::new(),
+                override_contested: false,
+            },
+        )
+        .await
+    }
+
+    pub async fn accept_with_review(
+        &self,
+        id: &str,
+        decision: ReviewDecision,
+    ) -> Result<PublishedAlgorithm, AgentError> {
+        validate_decision(&decision)?;
+        let _operation = self.operation.lock().await;
+        let mut queue = read_json(&self.dir.join("queue.json"))
+            .await?
+            .unwrap_or(QueueFile {
+                next: 1,
+                items: Vec::new(),
+            });
+        let mut archive = read_current_archive(&self.dir).await?;
         let index = queue
             .items
             .iter()
             .position(|item| item.candidate_id.eq_ignore_ascii_case(id))
             .ok_or_else(|| AgentError::NotFound(format!("candidate `{id}` not found")))?;
-        let mut item = queue.items.remove(index);
+        let mut item = queue.items[index].clone();
+        if item.review_state != "PENDING" && !decision.override_contested {
+            return Err(AgentError::Denied(format!(
+                "candidate `{id}` is {} and needs an explicit contested override",
+                item.review_state
+            )));
+        }
+        let candidate_hash = candidate_hash(&item)?;
+        if !decision.expected_candidate_hash.is_empty()
+            && decision.expected_candidate_hash != candidate_hash
+        {
+            return Err(AgentError::State(
+                "candidate changed after it was opened; inspect the current version before accepting"
+                    .into(),
+            ));
+        }
         item.review_state = "ACCEPTED".into();
+        item.review_notes = decision.reason.clone();
         item.updated_at = now()?;
         let published = published_from_candidate(&item);
+        if archive
+            .items
+            .iter()
+            .any(|existing| existing.id == published.id || existing.slug == published.slug)
         {
-            let mut archive = self.published.lock().await;
-            if archive
-                .items
-                .iter()
-                .any(|existing| existing.id == published.id || existing.slug == published.slug)
-            {
-                queue.items.insert(index, item);
-                return Err(AgentError::Denied(
-                    "an accepted algorithm with this identity already exists".into(),
-                ));
-            }
-            archive.items.insert(0, published.clone());
-            write_json(&self.dir.join("algorithms.json"), &*archive).await?;
+            return Err(AgentError::Denied(
+                "an accepted algorithm with this identity already exists".into(),
+            ));
         }
-        write_json(&self.dir.join("queue.json"), &*queue).await?;
+        queue.items.remove(index);
+        archive.items.insert(0, published.clone());
+
+        let previous = current_revision(&self.dir)
+            .await?
+            .map(|pointer| pointer.revision_id)
+            .unwrap_or_default();
+        let revision_id = format!("REV-{}", uuid::Uuid::new_v4().simple());
+        let canonical_hash = hash_json(&archive)?;
+        write_revision(
+            &self.dir,
+            &revision_id,
+            &previous,
+            &canonical_hash,
+            &archive,
+            Some((&published.id, &item.normalized)),
+        )
+        .await?;
+        let pointer = CurrentRevision {
+            revision_id: revision_id.clone(),
+            previous_revision_id: previous.clone(),
+            canonical_hash: canonical_hash.clone(),
+            committed_at: now()?,
+        };
+        write_json(&self.dir.join("CURRENT.json"), &pointer).await?;
+        write_json(&self.dir.join("queue.json"), &queue).await?;
+        // Compatibility exports are downstream views; CURRENT.json is authoritative.
+        write_json(&self.dir.join("algorithms.json"), &archive).await?;
         write_json(
-            &self.dir.join("accepted").join(format!("{}.json", published.id)),
+            &self
+                .dir
+                .join("accepted")
+                .join(format!("{}.json", published.id)),
             &item.normalized,
         )
         .await?;
+
+        *self.queue.lock().await = queue;
+        *self.published.lock().await = archive;
+        let receipt = json!({
+            "receipt_id": format!("PUB-{}", uuid::Uuid::new_v4().simple()),
+            "candidate_id": item.candidate_id,
+            "session_id": item.session_id,
+            "revision_id": revision_id,
+            "previous_revision_id": previous,
+            "action": "ACCEPT",
+            "reviewer": decision.reviewer,
+            "reason": decision.reason,
+            "candidate_hash": candidate_hash,
+            "canonical_hash": canonical_hash,
+            "created_at": now()?
+        });
+        self.persist_archive_receipt(&receipt).await?;
+        if let Some(pool) = &self.audit_pool {
+            if let Err(error) = crate::graph::upsert_canonical_algorithm(
+                pool,
+                &published,
+                &item.normalized,
+                receipt
+                    .get("revision_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+            )
+            .await
+            {
+                self.append_archive_event(json!({
+                    "event": "GRAPH_REPLICATION_FAILED",
+                    "candidate_id": item.candidate_id,
+                    "error": error.to_string(),
+                    "created_at": now()?
+                }))
+                .await?;
+            }
+        }
         Ok(published)
     }
 
     pub async fn reject(&self, id: &str, reason: &str) -> Result<QueuedCandidate, AgentError> {
+        let _operation = self.operation.lock().await;
         self.reload().await?;
         let mut queue = self.queue.lock().await;
         let item = queue
@@ -161,7 +293,145 @@ impl FileArchive {
         item.updated_at = now()?;
         let cloned = item.clone();
         write_json(&self.dir.join("queue.json"), &*queue).await?;
+        self.append_archive_event(json!({
+            "event": "CANDIDATE_REJECTED",
+            "candidate_id": cloned.candidate_id,
+            "session_id": cloned.session_id,
+            "reason": reason,
+            "created_at": now()?
+        }))
+        .await?;
         Ok(cloned)
+    }
+
+    pub async fn candidate_hash(&self, id: &str) -> Result<String, AgentError> {
+        candidate_hash(&self.get_candidate(id).await?)
+    }
+
+    pub async fn revision_history(&self) -> Result<Vec<Value>, AgentError> {
+        let dir = self.dir.join("revisions");
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+        let mut revisions = Vec::new();
+        for entry in std::fs::read_dir(dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                if let Some(manifest) = read_json::<Value>(&path.join("manifest.json")).await? {
+                    revisions.push(manifest);
+                }
+            }
+        }
+        revisions.sort_by(|a, b| {
+            b.get("committed_at")
+                .and_then(Value::as_str)
+                .cmp(&a.get("committed_at").and_then(Value::as_str))
+        });
+        Ok(revisions)
+    }
+
+    pub async fn rollback(
+        &self,
+        revision_id: &str,
+        reviewer: &str,
+        reason: &str,
+    ) -> Result<Value, AgentError> {
+        if reviewer.trim().is_empty() || reason.trim().is_empty() {
+            return Err(AgentError::Invalid(
+                "rollback reviewer and reason are required".into(),
+            ));
+        }
+        let _operation = self.operation.lock().await;
+        let revision_dir = self.dir.join("revisions").join(revision_id);
+        let archive: ArchiveFile = read_json(&revision_dir.join("algorithms.json"))
+            .await?
+            .ok_or_else(|| AgentError::NotFound(format!("revision `{revision_id}` not found")))?;
+        let previous = current_revision(&self.dir)
+            .await?
+            .map(|pointer| pointer.revision_id)
+            .unwrap_or_default();
+        let canonical_hash = hash_json(&archive)?;
+        let pointer = CurrentRevision {
+            revision_id: revision_id.to_owned(),
+            previous_revision_id: previous.clone(),
+            canonical_hash: canonical_hash.clone(),
+            committed_at: now()?,
+        };
+        write_json(&self.dir.join("CURRENT.json"), &pointer).await?;
+        write_json(&self.dir.join("algorithms.json"), &archive).await?;
+        *self.published.lock().await = archive;
+        let receipt = json!({
+            "receipt_id": format!("PUB-{}", uuid::Uuid::new_v4().simple()),
+            "candidate_id": "",
+            "session_id": "",
+            "revision_id": revision_id,
+            "previous_revision_id": previous,
+            "action": "ROLLBACK",
+            "reviewer": reviewer,
+            "reason": reason,
+            "candidate_hash": "",
+            "canonical_hash": canonical_hash,
+            "created_at": now()?
+        });
+        self.persist_archive_receipt(&receipt).await?;
+        Ok(receipt)
+    }
+
+    async fn persist_archive_receipt(&self, receipt: &Value) -> Result<(), AgentError> {
+        write_json(
+            &self.dir.join("receipts").join(format!(
+                "{}.json",
+                receipt
+                    .get("receipt_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("receipt")
+            )),
+            receipt,
+        )
+        .await?;
+        self.append_archive_event(receipt.clone()).await?;
+        if let Some(pool) = &self.audit_pool {
+            let replicated = async {
+                crate::persist::save_publication_receipt(pool, receipt).await?;
+                crate::persist::insert_event(
+                    pool,
+                    receipt
+                        .get("session_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or(""),
+                    "CANONICAL_ARCHIVE_CHANGED",
+                    receipt.clone(),
+                )
+                .await?;
+                Ok::<(), AgentError>(())
+            }
+            .await;
+            if let Err(error) = replicated {
+                self.append_archive_event(json!({
+                    "event": "AUDIT_REPLICATION_FAILED",
+                    "receipt_id": receipt.get("receipt_id"),
+                    "error": error.to_string(),
+                    "created_at": now()?
+                }))
+                .await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn append_archive_event(&self, event: Value) -> Result<(), AgentError> {
+        use tokio::io::AsyncWriteExt;
+        let path = self.dir.join("events.jsonl");
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .await?;
+        file.write_all(serde_json::to_string(&event)?.as_bytes())
+            .await?;
+        file.write_all(b"\n").await?;
+        file.flush().await?;
+        Ok(())
     }
 
     async fn persist_queue(&self, queue: &QueueFile) -> Result<(), AgentError> {
@@ -184,12 +454,14 @@ impl ArchiveHost for FileArchive {
         let now = now()?;
         let item = QueuedCandidate {
             candidate_id: format!("CAND-{number:04}"),
-            review_state: "PENDING".into(),
+            session_id: candidate.session_id,
+            review_state: candidate.review_state,
             review_notes: String::new(),
             created_at: now.clone(),
             updated_at: now,
             raw_extraction: candidate.raw_extraction,
             normalized: candidate.normalized,
+            verification: candidate.verification,
         };
         queue.next = number + 1;
         queue.items.insert(0, item.clone());
@@ -215,6 +487,7 @@ pub struct CatalogItem {
     pub tags: Vec<String>,
     pub created_at: String,
     pub extraction: Value,
+    pub candidate_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -237,6 +510,7 @@ fn catalog_from_published(item: PublishedAlgorithm, extraction: Value) -> Catalo
         tags: item.tags,
         created_at: String::new(),
         extraction,
+        candidate_hash: String::new(),
     }
 }
 
@@ -266,7 +540,108 @@ fn catalog_from_queued(item: &QueuedCandidate) -> CatalogItem {
             .unwrap_or_default(),
         created_at: item.created_at.clone(),
         extraction: n.clone(),
+        candidate_hash: candidate_hash(item).unwrap_or_default(),
     }
+}
+
+fn validate_decision(decision: &ReviewDecision) -> Result<(), AgentError> {
+    if decision.reviewer.trim().is_empty() {
+        return Err(AgentError::Invalid("reviewer is required".into()));
+    }
+    if decision.reason.trim().len() < 4 {
+        return Err(AgentError::Invalid(
+            "a meaningful review reason is required".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn candidate_hash(item: &QueuedCandidate) -> Result<String, AgentError> {
+    hash_json(&json!({
+        "candidate_id": item.candidate_id,
+        "session_id": item.session_id,
+        "raw_extraction": item.raw_extraction,
+        "normalized": item.normalized,
+        "verification": item.verification
+    }))
+}
+
+fn hash_json<T: Serialize>(value: &T) -> Result<String, AgentError> {
+    let bytes = serde_json::to_vec(value)?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+async fn current_revision(dir: &Path) -> Result<Option<CurrentRevision>, AgentError> {
+    read_json(&dir.join("CURRENT.json")).await
+}
+
+async fn read_current_archive(dir: &Path) -> Result<ArchiveFile, AgentError> {
+    if let Some(pointer) = current_revision(dir).await? {
+        let path = dir
+            .join("revisions")
+            .join(pointer.revision_id)
+            .join("algorithms.json");
+        if let Some(archive) = read_json(&path).await? {
+            return Ok(archive);
+        }
+    }
+    Ok(read_json(&dir.join("algorithms.json"))
+        .await?
+        .unwrap_or_default())
+}
+
+async fn read_accepted_detail(dir: &Path, id: &str) -> Result<Option<Value>, AgentError> {
+    if let Some(pointer) = current_revision(dir).await? {
+        let path = dir
+            .join("revisions")
+            .join(pointer.revision_id)
+            .join("accepted")
+            .join(format!("{id}.json"));
+        if let Some(detail) = read_json(&path).await? {
+            return Ok(Some(detail));
+        }
+    }
+    read_json(&dir.join("accepted").join(format!("{id}.json"))).await
+}
+
+async fn write_revision(
+    dir: &Path,
+    revision_id: &str,
+    previous_revision_id: &str,
+    canonical_hash: &str,
+    archive: &ArchiveFile,
+    new_detail: Option<(&str, &Value)>,
+) -> Result<(), AgentError> {
+    let revisions = dir.join("revisions");
+    tokio::fs::create_dir_all(&revisions).await?;
+    let staging = revisions.join(format!(".staging-{revision_id}"));
+    let accepted = staging.join("accepted");
+    tokio::fs::create_dir_all(&accepted).await?;
+    for item in &archive.items {
+        let detail = if new_detail.is_some_and(|(id, _)| id == item.id) {
+            new_detail.map(|(_, value)| value.clone())
+        } else {
+            read_accepted_detail(dir, &item.id).await?
+        }
+        .unwrap_or_else(|| serde_json::to_value(item).unwrap_or(Value::Null));
+        write_json(&accepted.join(format!("{}.json", item.id)), &detail).await?;
+    }
+    write_json(&staging.join("algorithms.json"), archive).await?;
+    write_json(
+        &staging.join("manifest.json"),
+        &json!({
+            "revision_id": revision_id,
+            "previous_revision_id": previous_revision_id,
+            "canonical_hash": canonical_hash,
+            "algorithm_count": archive.items.len(),
+            "committed_at": now()?
+        }),
+    )
+    .await?;
+    tokio::fs::rename(&staging, revisions.join(revision_id))
+        .await
+        .map_err(|error| AgentError::Io(format!("commit archive revision: {error}")))?;
+    Ok(())
 }
 
 fn published_from_candidate(item: &QueuedCandidate) -> PublishedAlgorithm {

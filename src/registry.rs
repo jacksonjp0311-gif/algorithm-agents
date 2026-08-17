@@ -146,9 +146,7 @@ impl Registry {
         if let Some(list) = tools_doc.get("tools").and_then(|v| v.as_array()) {
             for item in list {
                 if let Some(schema) = &tool_schema {
-                    if let Err(error) = validate_against_schema(schema, item) {
-                        return Err(error);
-                    }
+                    validate_against_schema(schema, item)?;
                 }
                 let tool: ToolManifest = serde_json::from_value(item.clone())?;
                 tools.insert(tool.id.clone(), tool);
@@ -168,7 +166,13 @@ impl Registry {
                 .manifest
                 .allowed_tools
                 .iter()
-                .filter(|tool| agent.manifest.denied_tools.iter().any(|denied| denied == *tool))
+                .filter(|tool| {
+                    agent
+                        .manifest
+                        .denied_tools
+                        .iter()
+                        .any(|denied| denied == *tool)
+                })
                 .cloned()
                 .collect();
             if !overlap.is_empty() {
@@ -177,12 +181,18 @@ impl Registry {
                     format!("tools both allowed and denied: {}", overlap.join(", ")),
                 ));
             }
-            for denied in ["publish_algorithm", "modify_canonical_archive", "unrestricted_shell"] {
-                if !agent.manifest.denied_tools.iter().any(|item| item == denied) {
-                    invalid.push((
-                        agent.manifest.id.clone(),
-                        format!("must deny `{denied}`"),
-                    ));
+            for denied in [
+                "publish_algorithm",
+                "modify_canonical_archive",
+                "unrestricted_shell",
+            ] {
+                if !agent
+                    .manifest
+                    .denied_tools
+                    .iter()
+                    .any(|item| item == denied)
+                {
+                    invalid.push((agent.manifest.id.clone(), format!("must deny `{denied}`")));
                 }
             }
         }
@@ -223,7 +233,11 @@ fn load_optional_schema(root: &Path, rel: &str) -> Result<Option<Value>, AgentEr
     }
 }
 
-fn load_agent(root: &Path, id: &str, agent_schema: Option<&Value>) -> Result<LoadedAgent, AgentError> {
+fn load_agent(
+    root: &Path,
+    id: &str,
+    agent_schema: Option<&Value>,
+) -> Result<LoadedAgent, AgentError> {
     let dir = root.join("agents").join(id);
     let manifest_path = dir.join("agent.json");
     if !manifest_path.exists() {

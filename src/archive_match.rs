@@ -25,7 +25,9 @@ pub fn verdict_against_archive(
                 verdict = "POSSIBLE_DUPLICATE";
             }
             matches.push(json!({ "id": item.id, "title": item.title, "kind": "summary" }));
-        } else if !item.core_idea.is_empty() && !core_idea.is_empty() && contains_claim(&item.core_idea, core_idea)
+        } else if !item.core_idea.is_empty()
+            && !core_idea.is_empty()
+            && contains_claim(&item.core_idea, core_idea)
         {
             if verdict == "NEW" {
                 verdict = "VARIANT";

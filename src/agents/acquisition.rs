@@ -6,7 +6,10 @@ use crate::collect::{self, fixture_locator, list_local_sources, live_fetch_block
 use crate::error::AgentError;
 use crate::parse::{keyword_score, parse_labeled_document};
 
-pub async fn source_scout(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResult, AgentError> {
+pub async fn source_scout(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<HandlerResult, AgentError> {
     let objective = input
         .get("objective")
         .and_then(|v| v.as_str())
@@ -59,7 +62,10 @@ pub async fn source_scout(ctx: &ExecContext<'_>, input: &Value) -> Result<Handle
     ))
 }
 
-pub async fn web_collector(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResult, AgentError> {
+pub async fn web_collector(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<HandlerResult, AgentError> {
     let locator = input
         .get("locator")
         .or_else(|| input.get("url"))
@@ -81,7 +87,9 @@ pub async fn web_collector(ctx: &ExecContext<'_>, input: &Value) -> Result<Handl
     };
     let text = collect::normalize_source_text(locator, &raw);
     if text.len() > ctx.runtime.permissions.max_fetch_bytes {
-        return Err(AgentError::Budget("retrieved source exceeds size limit".into()));
+        return Err(AgentError::Budget(
+            "retrieved source exceeds size limit".into(),
+        ));
     }
     Ok(HandlerResult::complete(
         "SOURCE_TEXT",
@@ -95,7 +103,10 @@ pub async fn web_collector(ctx: &ExecContext<'_>, input: &Value) -> Result<Handl
     ))
 }
 
-pub async fn paper_analyst(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResult, AgentError> {
+pub async fn paper_analyst(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<HandlerResult, AgentError> {
     let (origin, doc, _text) = load_doc(ctx, input).await?;
     Ok(HandlerResult::complete(
         "PAPER_ANALYSIS",
@@ -114,7 +125,10 @@ pub async fn paper_analyst(ctx: &ExecContext<'_>, input: &Value) -> Result<Handl
     ))
 }
 
-pub async fn repository_scout(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResult, AgentError> {
+pub async fn repository_scout(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<HandlerResult, AgentError> {
     let (origin, doc, _text) = load_doc(ctx, input).await?;
     Ok(HandlerResult::complete(
         "SOURCE",
@@ -130,7 +144,10 @@ pub async fn repository_scout(ctx: &ExecContext<'_>, input: &Value) -> Result<Ha
     ))
 }
 
-pub async fn citation_walker(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResult, AgentError> {
+pub async fn citation_walker(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let max_depth = input
         .get("max_depth")
@@ -182,7 +199,14 @@ fn walk_citations(
                     "depth": depth
                 }));
                 if depth < max_depth {
-                    walk_citations(root, &child.citations, depth + 1, max_depth, max_sources, walked)?;
+                    walk_citations(
+                        root,
+                        &child.citations,
+                        depth + 1,
+                        max_depth,
+                        max_sources,
+                        walked,
+                    )?;
                 }
             }
         } else {

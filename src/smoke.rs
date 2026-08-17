@@ -64,8 +64,14 @@ pub async fn smoke_all(runtime: &AgentRuntime, only: Option<&str>) -> Result<Val
 
     let pass = results.iter().filter(|item| item.ok).count();
     let fail = results.len() - pass;
-    let verdict = if fail == 0 && failure_path { "PASS" } else { "FAIL" };
-    let _ = runtime.set_session_state(&session.session_id, "COMPLETE").await;
+    let verdict = if fail == 0 && failure_path {
+        "PASS"
+    } else {
+        "FAIL"
+    };
+    let _ = runtime
+        .set_session_state(&session.session_id, "COMPLETE")
+        .await;
     Ok(json!({
         "banner": "ALGORITHM AGENTS / SMOKE COMPILER",
         "session_id": session.session_id,
@@ -127,7 +133,13 @@ async fn smoke_one(
                 };
             }
             if let Ok(events) = persist::list_events(&runtime.pool, session_id).await {
-                if !events.iter().any(|event| event.kind == "AGENT_COMPLETED" || event.kind == "AGENT_FAILED" || event.kind == "AGENT_LOW_CONFIDENCE" || event.kind == "AGENT_NEEDS_HUMAN" || event.kind == "AGENT_BLOCKED") {
+                if !events.iter().any(|event| {
+                    event.kind == "AGENT_COMPLETED"
+                        || event.kind == "AGENT_FAILED"
+                        || event.kind == "AGENT_LOW_CONFIDENCE"
+                        || event.kind == "AGENT_NEEDS_HUMAN"
+                        || event.kind == "AGENT_BLOCKED"
+                }) {
                     return SmokeResult {
                         agent_id: agent_id.into(),
                         ok: false,
@@ -183,7 +195,8 @@ pub async fn smoke_process(runtime: &AgentRuntime) -> Result<Value, AgentError> 
 }
 
 pub fn format_smoke_report(report: &Value) -> String {
-    let mut out = String::from("ALGORITHM AGENTS / SMOKE COMPILER\n=================================\n\n");
+    let mut out =
+        String::from("ALGORITHM AGENTS / SMOKE COMPILER\n=================================\n\n");
     if let Some(results) = report.get("results").and_then(|v| v.as_array()) {
         for item in results {
             let id = item.get("agent").and_then(|v| v.as_str()).unwrap_or("?");
@@ -199,15 +212,24 @@ pub fn format_smoke_report(report: &Value) -> String {
     out.push('\n');
     out.push_str(&format!(
         "AGENTS TESTED: {}\nPASS:          {}\nFAIL:           {}\n\nVERDICT: {}\n",
-        report.get("agents_tested").and_then(|v| v.as_u64()).unwrap_or(0),
+        report
+            .get("agents_tested")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
         report.get("pass").and_then(|v| v.as_u64()).unwrap_or(0),
         report.get("fail").and_then(|v| v.as_u64()).unwrap_or(0),
-        report.get("verdict").and_then(|v| v.as_str()).unwrap_or("FAIL")
+        report
+            .get("verdict")
+            .and_then(|v| v.as_str())
+            .unwrap_or("FAIL")
     ));
     out
 }
 
-pub async fn smoke_via_tool(runtime: &AgentRuntime, agent: Option<&str>) -> Result<Value, AgentError> {
+pub async fn smoke_via_tool(
+    runtime: &AgentRuntime,
+    agent: Option<&str>,
+) -> Result<Value, AgentError> {
     let report = smoke_all(runtime, agent).await?;
     let _ = tools::dispatch(runtime, "get_overview", json!({})).await;
     Ok(report)

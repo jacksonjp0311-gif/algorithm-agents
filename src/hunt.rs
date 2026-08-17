@@ -37,7 +37,11 @@ pub async fn hunt(runtime: &AgentRuntime, spec: HuntSpec) -> Result<Value, Agent
     } else {
         0
     };
-    let arxiv_budget = if spec.web { limit.saturating_sub(web_budget).max(1) } else { limit };
+    let arxiv_budget = if spec.web {
+        limit.saturating_sub(web_budget).max(1)
+    } else {
+        limit
+    };
     if spec.arxiv {
         hits.extend(search_arxiv(&runtime.permissions, &spec.query, arxiv_budget).await?);
         hits.truncate(arxiv_budget);
@@ -86,7 +90,11 @@ pub async fn hunt(runtime: &AgentRuntime, spec: HuntSpec) -> Result<Value, Agent
     }))
 }
 
-async fn search_arxiv(permissions: &Permissions, query: &str, limit: usize) -> Result<Vec<Hit>, AgentError> {
+async fn search_arxiv(
+    permissions: &Permissions,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<Hit>, AgentError> {
     let terms = arxiv_terms(query);
     let url = format!(
         "https://export.arxiv.org/api/query?search_query={}&start=0&max_results={}&sortBy=relevance&sortOrder=descending",
@@ -184,10 +192,7 @@ async fn search_wikipedia(
         );
         let (_resolved, body) = fetch::fetch_url(permissions, &url).await?;
         let parsed: Value = serde_json::from_str(&body).unwrap_or(json!({}));
-        if let Some(rows) = parsed
-            .pointer("/query/search")
-            .and_then(|v| v.as_array())
-        {
+        if let Some(rows) = parsed.pointer("/query/search").and_then(|v| v.as_array()) {
             for row in rows {
                 let title = row.get("title").and_then(|v| v.as_str()).unwrap_or("");
                 if title.is_empty() {
@@ -196,9 +201,7 @@ async fn search_wikipedia(
                 let page = title.replace(' ', "_");
                 hits.push(Hit {
                     title: title.to_owned(),
-                    url: format!(
-                        "https://en.wikipedia.org/w/index.php?title={page}&action=raw"
-                    ),
+                    url: format!("https://en.wikipedia.org/w/index.php?title={page}&action=raw"),
                     origin: "wikipedia".into(),
                     blurb: decode_html(row.get("snippet").and_then(|v| v.as_str()).unwrap_or("")),
                 });

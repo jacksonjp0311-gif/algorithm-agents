@@ -19,8 +19,11 @@ pub struct PublishedAlgorithm {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ReviewCandidate {
+    pub session_id: String,
     pub raw_extraction: String,
     pub normalized: Value,
+    pub review_state: String,
+    pub verification: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -56,9 +59,13 @@ impl ArchiveHost for MemoryHost {
     ) -> Result<SubmittedCandidate, AgentError> {
         let mut submitted = self.submitted.lock().await;
         submitted.push(candidate);
+        let review_state = submitted
+            .last()
+            .map(|candidate| candidate.review_state.clone())
+            .unwrap_or_else(|| "NEEDS_HUMAN".into());
         Ok(SubmittedCandidate {
             candidate_id: format!("EXT / {:04}", submitted.len()),
-            review_state: "PENDING".into(),
+            review_state,
         })
     }
 }

@@ -1,3 +1,34 @@
 {
-  "type": "object"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alchetron Algorithm Extraction",
+  "type": "object",
+  "required": ["title", "core_idea", "source", "provenance", "publication", "validation"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "short_name": { "type": "string" },
+    "domain": { "type": "string" },
+    "summary": { "type": "string" },
+    "plain_language_explanation": { "type": "string" },
+    "core_idea": { "type": "string" },
+    "math": { "type": "string" },
+    "variables": { "type": "array" },
+    "assumptions": { "type": "array" },
+    "constraints": { "type": "array" },
+    "pseudocode": { "type": "string" },
+    "reference_code": { "type": "string" },
+    "reference_language": { "type": "string" },
+    "source": { "type": "object" },
+    "provenance": { "type": "object" },
+    "publication": { "type": "object" },
+    "validation": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["UNVERIFIED", "NEEDS_HUMAN", "VERIFIED", "REVIEW_READY", "FAILED", "BLOCKED"] },
+        "mandatory_pass": { "type": "boolean" },
+        "gates": { "type": "object" }
+      }
+    },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  }
 }

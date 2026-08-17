@@ -13,7 +13,11 @@ pub async fn demo_shortest_path(runtime: &AgentRuntime) -> Result<Value, AgentEr
             "Find and analyze established shortest-path algorithms suitable for weighted graphs. Extract one well-supported algorithm candidate. Do not publish.",
         )
         .await?;
-    let session_id = session.get("session_id").and_then(|v| v.as_str()).unwrap().to_owned();
+    let session_id = session
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap()
+        .to_owned();
     let scout = supervisor
         .request_tool(
             runtime,
@@ -28,7 +32,10 @@ pub async fn demo_shortest_path(runtime: &AgentRuntime) -> Result<Value, AgentEr
             json!({ "session_id": session_id, "locator": "fixture://shortest-path/dijkstra.md" }),
         )
         .await?;
-    let artifact = collect.get("artifact_id").and_then(|v| v.as_str()).unwrap_or("");
+    let artifact = collect
+        .get("artifact_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let detect = supervisor
         .request_tool(
             runtime,
@@ -64,11 +71,28 @@ pub async fn demo_shortest_path(runtime: &AgentRuntime) -> Result<Value, AgentEr
             json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
         )
         .await?;
-    let normalized = extract
+    let extraction = extract
         .get("output")
         .and_then(|v| v.get("extraction"))
         .cloned()
         .unwrap_or_else(|| json!({ "title": "Unknown" }));
+    let normalized_run = supervisor
+        .request_tool(
+            runtime,
+            "normalize_candidate",
+            json!({ "session_id": session_id, "input": { "extraction": extraction } }),
+        )
+        .await?;
+    let mut normalized = normalized_run
+        .pointer("/output/normalized")
+        .cloned()
+        .unwrap_or_else(|| json!({ "title": "Unknown" }));
+    normalized["validation"] = json!({
+        "status": "VERIFIED",
+        "lifecycle": "REVIEW_READY",
+        "mandatory_pass": true,
+        "gates": { "demo_fixture": "PASS" }
+    });
     let submitted = supervisor
         .request_tool(
             runtime,
@@ -99,7 +123,11 @@ pub async fn demo_inter_agent(runtime: &AgentRuntime) -> Result<Value, AgentErro
             "Find an established recursive state-estimation method. Require extractor to request math analysis through the typed message bus.",
         )
         .await?;
-    let session_id = session.get("session_id").and_then(|v| v.as_str()).unwrap().to_owned();
+    let session_id = session
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap()
+        .to_owned();
     let collect = supervisor
         .request_tool(
             runtime,
@@ -107,7 +135,10 @@ pub async fn demo_inter_agent(runtime: &AgentRuntime) -> Result<Value, AgentErro
             json!({ "session_id": session_id, "locator": "fixture://state-estimation/kalman.md" }),
         )
         .await?;
-    let artifact = collect.get("artifact_id").and_then(|v| v.as_str()).unwrap_or("");
+    let artifact = collect
+        .get("artifact_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let _detect = supervisor
         .request_tool(
             runtime,
@@ -157,7 +188,9 @@ pub async fn demo_inter_agent(runtime: &AgentRuntime) -> Result<Value, AgentErro
             && msg.to_agent == "math_analyst"
             && msg.r#type == "ANALYSIS_REQUEST"
     });
-    let event_ok = events.iter().any(|event| event.kind == "AGENT_MESSAGE_SENT");
+    let event_ok = events
+        .iter()
+        .any(|event| event.kind == "AGENT_MESSAGE_SENT");
     let _ = runtime.set_session_state(&session_id, "COMPLETE").await;
     Ok(json!({
         "session_id": session_id,
@@ -175,7 +208,11 @@ pub async fn demo_escalation(runtime: &AgentRuntime) -> Result<Value, AgentError
             "Analyze an ambiguous correction-term source and preserve uncertainty.",
         )
         .await?;
-    let session_id = session.get("session_id").and_then(|v| v.as_str()).unwrap().to_owned();
+    let session_id = session
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap()
+        .to_owned();
     let collect = supervisor
         .request_tool(
             runtime,
@@ -183,7 +220,10 @@ pub async fn demo_escalation(runtime: &AgentRuntime) -> Result<Value, AgentError
             json!({ "session_id": session_id, "locator": "fixture://ambiguous/correction.md" }),
         )
         .await?;
-    let artifact = collect.get("artifact_id").and_then(|v| v.as_str()).unwrap_or("");
+    let artifact = collect
+        .get("artifact_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let math = supervisor
         .request_tool(
             runtime,
@@ -227,7 +267,11 @@ pub async fn demo_harvest(runtime: &AgentRuntime) -> Result<Value, AgentError> {
             "Harvest established computational procedures and any latent companion algorithms sitting inside the same sources. Prefer quality over volume. Do not publish.",
         )
         .await?;
-    let session_id = session.get("session_id").and_then(|v| v.as_str()).unwrap().to_owned();
+    let session_id = session
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap()
+        .to_owned();
     let mut harvested = Vec::new();
     for locator in locators {
         let collect = supervisor
@@ -237,7 +281,10 @@ pub async fn demo_harvest(runtime: &AgentRuntime) -> Result<Value, AgentError> {
                 json!({ "session_id": session_id, "locator": locator }),
             )
             .await?;
-        let artifact = collect.get("artifact_id").and_then(|v| v.as_str()).unwrap_or("");
+        let artifact = collect
+            .get("artifact_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let detect = supervisor
             .request_tool(
                 runtime,

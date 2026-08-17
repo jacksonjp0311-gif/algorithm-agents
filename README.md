@@ -2,7 +2,9 @@
   <img src="docs/extracting-agents.jpg" alt="Specialist agents drawing procedures out of the human record and condensing them into archive cards" width="100%">
 </p>
 
-# Algorithm Agents
+# Alchetron
+
+**Alchemy × cybernetics for governed algorithm extraction.** The binary remains `algo`; the system is Alchetron.
 
 This is not a chatbot with extra steps.
 
@@ -79,7 +81,13 @@ cd algorithm-agents
 cargo build --bin algo
 ```
 
-Prove the crew without the network:
+On Windows, verify and enter the operator console:
+
+```powershell
+.\scripts\run-alchetron.ps1 -Verify
+```
+
+Or prove the crew without the network:
 
 ```bash
 cargo run --bin algo -- smoke --process
@@ -107,8 +115,11 @@ Live retrieval is **off** until `--live` or an intent that clearly asks for the 
 | `algo --live hunt "physics"` | arXiv + Wikipedia, then extract |
 | `algo harvest "shortest path"` | Local fixtures and `sources/` |
 | `algo find "kalman"` | Search fixtures, notes, archive |
-| `algo archive accept CAND-0001` | Human promotion into the ledger |
-| `algo ui` | The card table |
+| `algo archive accept CAND-0001 --reason "evidence reviewed"` | Human promotion into an immutable revision |
+| `algo archive history` | Canonical revisions and rollback targets |
+| `algo graph snapshot` | Canonical knowledge graph |
+| `algo supervisor` | Provider-neutral model entry contract |
+| `algo ui` | Secured operator dashboard and interactive Nexus |
 | `algo smoke --process` | Compile every agent and the harvest path |
 
 Drop notes in `sources/`. Labeled fields extract cleanly. Unstructured text is inferred and marked uncertain.
@@ -144,6 +155,14 @@ The work is the extraction **and** the refusal.
 Deeper room — covenant, circuit, commands, how to extend without breaking the split:
 
 **[`advanced/`](advanced/README.md)**
+
+Operational references:
+
+- [`docs/architecture.md`](docs/architecture.md)
+- [`docs/security.md`](docs/security.md)
+- [`docs/operator.md`](docs/operator.md)
+- [`docs/archive-recovery.md`](docs/archive-recovery.md)
+- [`docs/supervisor-protocol.md`](docs/supervisor-protocol.md)
 
 ---
 

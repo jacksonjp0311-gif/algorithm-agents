@@ -77,13 +77,17 @@ pub async fn verify_reference_code(
             if output.status.success() && stdout.contains("SYNTAX_OK") {
                 json!({
                     "result": "PASS",
-                    "reason": "python ast.parse accepted the reference implementation",
+                    "verification_level": "SYNTAX_ONLY",
+                    "executed_candidate_code": false,
+                    "reason": "python ast.parse accepted the reference implementation; behavior and correctness remain unverified",
                     "stdout": stdout,
                     "stderr": stderr,
                 })
             } else {
                 json!({
                     "result": "FAIL",
+                    "verification_level": "SYNTAX_ONLY",
+                    "executed_candidate_code": false,
                     "reason": "interpreter rejected the reference implementation",
                     "stdout": stdout,
                     "stderr": stderr,
@@ -107,7 +111,13 @@ fn truncate(text: &str, limit: usize) -> String {
     if text.len() <= limit {
         text.to_owned()
     } else {
-        format!("{}…", &text[..limit])
+        let boundary = text
+            .char_indices()
+            .map(|(index, _)| index)
+            .take_while(|index| *index <= limit)
+            .last()
+            .unwrap_or(0);
+        format!("{}…", &text[..boundary])
     }
 }
 

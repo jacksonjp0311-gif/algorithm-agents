@@ -12,8 +12,10 @@ pub async fn normalizer(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerR
     };
     let mut normalized = extraction;
     if let Some(obj) = normalized.as_object_mut() {
-        obj.entry("publication").or_insert(json!({ "state": "draft" }));
-        obj.entry("validation").or_insert(json!({ "status": "UNVERIFIED" }));
+        obj.entry("publication")
+            .or_insert(json!({ "state": "draft" }));
+        obj.entry("validation")
+            .or_insert(json!({ "status": "UNVERIFIED" }));
         obj.entry("provenance").or_insert(json!({
             "class": "SOURCE_RECONSTRUCTED",
             "extraction_method": "agent_system",
@@ -47,7 +49,10 @@ pub async fn summarizer(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerR
     ))
 }
 
-pub async fn code_translator(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResult, AgentError> {
+pub async fn code_translator(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let (code, origin_label) = if !doc.reference_code.trim().is_empty() {
         (
@@ -79,7 +84,10 @@ pub async fn code_translator(ctx: &ExecContext<'_>, input: &Value) -> Result<Han
     ))
 }
 
-pub async fn experiment_designer(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResult, AgentError> {
+pub async fn experiment_designer(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     Ok(HandlerResult::complete(
         "EXPERIMENT_PLAN",

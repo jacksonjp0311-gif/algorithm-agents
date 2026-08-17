@@ -1,0 +1,38 @@
+name: verify
+on:
+  push:
+    branches: ["main", "agent/**"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate JSON contracts
+        shell: pwsh
+        run: |
+          Get-ChildItem schemas -Filter *.json | ForEach-Object {
+            Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json | Out-Null
+          }
+          Get-Content registry/agents.json -Raw | ConvertFrom-Json | Out-Null
+          Get-Content registry/tools.json -Raw | ConvertFrom-Json | Out-Null
+          Get-Content registry/permissions.json -Raw | ConvertFrom-Json | Out-Null
+      - run: cargo fmt --all -- --check
+      - run: cargo check --locked --all-targets
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked --all-targets
+      - name: Process smoke compiler
+        shell: pwsh
+        run: |
+          $scratch = Join-Path $env:RUNNER_TEMP 'alchetron-smoke'
+          cargo run --locked --bin algo -- --root $PWD --data-dir $scratch smoke --process

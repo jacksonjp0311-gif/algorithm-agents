@@ -47,7 +47,9 @@ pub async fn find_sources(runtime: &AgentRuntime, query: &str) -> Result<Value, 
             })
         })
         .collect();
-    let _ = runtime.set_session_state(&session.session_id, "COMPLETE").await;
+    let _ = runtime
+        .set_session_state(&session.session_id, "COMPLETE")
+        .await;
     Ok(json!({
         "session_id": session.session_id,
         "query": query,
@@ -56,7 +58,11 @@ pub async fn find_sources(runtime: &AgentRuntime, query: &str) -> Result<Value, 
     }))
 }
 
-pub async fn harvest(runtime: &AgentRuntime, objective: &str, limit: usize) -> Result<Value, AgentError> {
+pub async fn harvest(
+    runtime: &AgentRuntime,
+    objective: &str,
+    limit: usize,
+) -> Result<Value, AgentError> {
     let supervisor = ScriptedSupervisor::new("harvest");
     let session = supervisor
         .receive_directive(
@@ -102,7 +108,11 @@ pub async fn harvest(runtime: &AgentRuntime, objective: &str, limit: usize) -> R
     }))
 }
 
-pub async fn scrape(runtime: &AgentRuntime, locator: &str, objective: &str) -> Result<Value, AgentError> {
+pub async fn scrape(
+    runtime: &AgentRuntime,
+    locator: &str,
+    objective: &str,
+) -> Result<Value, AgentError> {
     let supervisor = ScriptedSupervisor::new("scrape");
     let session = supervisor
         .receive_directive(
@@ -137,7 +147,12 @@ async fn extract_and_save(
             json!({ "session_id": session_id, "locator": locator }),
         )
         .await?;
-    if collect.get("output").and_then(|v| v.get("blocked")).and_then(|v| v.as_bool()) == Some(true) {
+    if collect
+        .get("output")
+        .and_then(|v| v.get("blocked"))
+        .and_then(|v| v.as_bool())
+        == Some(true)
+    {
         return Ok(json!({
             "locator": locator,
             "blocked": true,
@@ -162,24 +177,10 @@ async fn extract_and_save(
             json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
         )
         .await?;
-    let _ = supervisor
+    let math_analysis = supervisor
         .request_tool(
             runtime,
             "analyze_math",
-            json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
-        )
-        .await?;
-    let _ = supervisor
-        .request_tool(
-            runtime,
-            "verify_provenance",
-            json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
-        )
-        .await?;
-    let _ = supervisor
-        .request_tool(
-            runtime,
-            "normalize_candidate",
             json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
         )
         .await?;
@@ -194,11 +195,154 @@ async fn extract_and_save(
             "extracted": false
         }));
     }
-    let normalized = extract
+    let extraction = extract
         .get("output")
         .and_then(|v| v.get("extraction"))
         .cloned()
         .unwrap_or_else(|| json!({ "title": "Unknown" }));
+    let code_analysis = supervisor
+        .request_tool(
+            runtime,
+            "analyze_code",
+            json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
+        )
+        .await?;
+    let complexity = supervisor
+        .request_tool(
+            runtime,
+            "analyze_complexity",
+            json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
+        )
+        .await?;
+    let assumptions = supervisor
+        .request_tool(
+            runtime,
+            "analyze_assumptions",
+            json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
+        )
+        .await?;
+    let failures = supervisor
+        .request_tool(
+            runtime,
+            "analyze_failures",
+            json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
+        )
+        .await?;
+    let provenance = supervisor
+        .request_tool(
+            runtime,
+            "verify_provenance",
+            json!({
+                "session_id": session_id,
+                "input": { "artifact_id": artifact, "claims": claim_strings(&extraction) }
+            }),
+        )
+        .await?;
+    let math_verification = supervisor
+        .request_tool(
+            runtime,
+            "verify_math",
+            json!({ "session_id": session_id, "input": { "artifact_id": artifact } }),
+        )
+        .await?;
+    let cross_source = supervisor
+        .request_tool(
+            runtime,
+            "run_agent",
+            json!({
+                "session_id": session_id,
+                "agent_id": "cross_source_verifier",
+                "input": { "artifact_id": artifact }
+            }),
+        )
+        .await?;
+    let challenge = supervisor
+        .request_tool(
+            runtime,
+            "challenge_claims",
+            json!({
+                "session_id": session_id,
+                "input": { "artifact_id": artifact, "extraction": extraction }
+            }),
+        )
+        .await?;
+    let code = extraction
+        .get("reference_code")
+        .and_then(Value::as_str)
+        .filter(|code| !code.trim().is_empty())
+        .map(|source| {
+            json!({
+                "session_id": session_id,
+                "input": {
+                    "language": extraction
+                        .get("reference_language")
+                        .and_then(Value::as_str)
+                        .unwrap_or("python"),
+                    "source": source
+                }
+            })
+        });
+    let code_verification = if let Some(args) = code {
+        Some(
+            supervisor
+                .request_tool(runtime, "verify_code", args)
+                .await?,
+        )
+    } else {
+        None
+    };
+    let normalizer = supervisor
+        .request_tool(
+            runtime,
+            "normalize_candidate",
+            json!({ "session_id": session_id, "input": { "extraction": extraction } }),
+        )
+        .await?;
+    let mut normalized = normalizer
+        .get("output")
+        .and_then(|v| v.get("normalized"))
+        .cloned()
+        .unwrap_or_else(|| json!({ "title": "Unknown" }));
+    let verification = verification_report(
+        &detect,
+        &math_verification,
+        &provenance,
+        &challenge,
+        code_verification.as_ref(),
+        &cross_source,
+    );
+    if let Some(object) = normalized.as_object_mut() {
+        object.insert("validation".into(), verification.clone());
+        object.insert(
+            "analysis".into(),
+            json!({
+                "math": math_analysis.get("output"),
+                "code": code_analysis.get("output"),
+                "complexity": complexity.get("output"),
+                "assumptions": assumptions.get("output"),
+                "failure_modes": failures.get("output")
+            }),
+        );
+        object.insert(
+            "agent_artifacts".into(),
+            json!({
+                "source": artifact,
+                "detector": detect.get("artifact_id"),
+                "extractor": extract.get("artifact_id"),
+                "math_analysis": math_analysis.get("artifact_id"),
+                "code_analysis": code_analysis.get("artifact_id"),
+                "complexity": complexity.get("artifact_id"),
+                "assumptions": assumptions.get("artifact_id"),
+                "failure_modes": failures.get("artifact_id"),
+                "math_verification": math_verification.get("artifact_id"),
+                "provenance": provenance.get("artifact_id"),
+                "challenge": challenge.get("artifact_id"),
+                "cross_source": cross_source.get("artifact_id"),
+                "code": code_verification.as_ref().and_then(|run| run.get("artifact_id")),
+                "normalizer": normalizer.get("artifact_id")
+            }),
+        );
+    }
     let submitted = supervisor
         .request_tool(
             runtime,
@@ -206,7 +350,9 @@ async fn extract_and_save(
             json!({
                 "session_id": session_id,
                 "normalized": normalized,
-                "raw_extraction": format!("pipeline extract from {locator}")
+                "raw_extraction": serde_json::to_string_pretty(
+                    extract.get("output").unwrap_or(&Value::Null)
+                ).unwrap_or_else(|_| format!("pipeline extract from {locator}"))
             }),
         )
         .await?;
@@ -214,12 +360,119 @@ async fn extract_and_save(
         "locator": locator,
         "artifact_id": artifact,
         "detect": detect.get("output"),
+        "verification": verification,
         "title": normalized.get("title"),
         "candidate": submitted
     }))
 }
 
-pub async fn session_summary(runtime: &AgentRuntime, session_id: &str) -> Result<Value, AgentError> {
+fn verification_report(
+    detect: &Value,
+    math: &Value,
+    provenance: &Value,
+    challenge: &Value,
+    code: Option<&Value>,
+    cross_source: &Value,
+) -> Value {
+    let detector = detect.pointer("/output/verdict").and_then(Value::as_str);
+    let unsupported = provenance
+        .pointer("/output/unsupported")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let math_result = math.pointer("/output/result").and_then(Value::as_str);
+    let challenged = challenge
+        .pointer("/output/challenged")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let code_result = code
+        .and_then(|run| run.pointer("/output/result"))
+        .and_then(Value::as_str)
+        .unwrap_or("NOT_TESTED");
+    let corroboration = cross_source
+        .pointer("/output/certainty")
+        .and_then(Value::as_str)
+        .unwrap_or("NOT_INCREASED");
+    let mandatory_pass = detector == Some("YES")
+        && unsupported == 0
+        && math_result != Some("FAIL")
+        && !challenged
+        && code_result != "FAIL";
+    let contested = detector != Some("YES")
+        || unsupported > 0
+        || challenged
+        || math_result == Some("FAIL")
+        || code_result == "FAIL";
+    let status = if mandatory_pass {
+        "VERIFIED"
+    } else if contested {
+        "NEEDS_HUMAN"
+    } else {
+        "UNVERIFIED"
+    };
+    json!({
+        "status": status,
+        "lifecycle": if mandatory_pass { "REVIEW_READY" } else { "CONTESTED" },
+        "mandatory_pass": mandatory_pass,
+        "gates": {
+            "detector": detector.unwrap_or("UNKNOWN"),
+            "provenance_unsupported_claims": unsupported,
+            "math": math_result.unwrap_or("NOT_TESTED"),
+            "hallucination_challenged": challenged,
+            "code": code_result,
+            "cross_source": corroboration
+        },
+        "claims": claim_verdicts(provenance),
+        "epistemic_classes": [
+            "SOURCE_STATED",
+            "MECHANICALLY_VERIFIED",
+            "MODEL_INFERRED",
+            "HUMAN_CONFIRMED",
+            "UNKNOWN"
+        ]
+    })
+}
+
+fn claim_strings(extraction: &Value) -> Vec<String> {
+    ["title", "summary", "core_idea", "math"]
+        .iter()
+        .filter_map(|key| extraction.get(*key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|claim| !claim.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn claim_verdicts(provenance: &Value) -> Vec<Value> {
+    provenance
+        .pointer("/output/claims")
+        .and_then(Value::as_array)
+        .map(|claims| {
+            claims
+                .iter()
+                .map(|claim| {
+                    json!({
+                        "claim": claim.get("claim"),
+                        "supported": claim.get("supported"),
+                        "epistemic_status": if claim
+                            .get("supported")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false)
+                        {
+                            "SOURCE_STATED"
+                        } else {
+                            "UNKNOWN"
+                        }
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub async fn session_summary(
+    runtime: &AgentRuntime,
+    session_id: &str,
+) -> Result<Value, AgentError> {
     let session = persist::get_session(&runtime.pool, session_id).await?;
     let runs = persist::list_runs(&runtime.pool, session_id).await?;
     Ok(json!({

@@ -43,7 +43,9 @@ pub fn parse_intent(raw: &str) -> Intent {
             locator: None,
         };
     }
-    if lower.contains("archive list") || lower.contains("show queue") || lower.contains("list candidates")
+    if lower.contains("archive list")
+        || lower.contains("show queue")
+        || lower.contains("list candidates")
     {
         return Intent {
             kind: IntentKind::ArchiveList,
@@ -70,8 +72,7 @@ pub fn parse_intent(raw: &str) -> Intent {
             locator: None,
         };
     }
-    if lower.starts_with("find ") || lower.contains("in the archive") || lower.contains("look up")
-    {
+    if lower.starts_with("find ") || lower.contains("in the archive") || lower.contains("look up") {
         return Intent {
             kind: IntentKind::Find,
             live: false,
@@ -87,11 +88,16 @@ pub fn parse_intent(raw: &str) -> Intent {
     }
 }
 
-pub async fn execute_intent(runtime: &mut AgentRuntime, raw: &str, limit: usize) -> Result<Value, AgentError> {
+pub async fn execute_intent(
+    runtime: &mut AgentRuntime,
+    raw: &str,
+    limit: usize,
+) -> Result<Value, AgentError> {
     let intent = parse_intent(raw);
     if intent.live {
         runtime.permissions.live_fetch_enabled = true;
-        runtime.permissions.fetch_timeout_seconds = runtime.permissions.fetch_timeout_seconds.max(20);
+        runtime.permissions.fetch_timeout_seconds =
+            runtime.permissions.fetch_timeout_seconds.max(20);
         runtime.permissions.max_fetch_bytes = runtime.permissions.max_fetch_bytes.max(1_200_000);
     }
     let action = match intent.kind {
@@ -192,7 +198,9 @@ fn strip_command_words(text: &str) -> String {
     let kept: Vec<&str> = text
         .split_whitespace()
         .filter(|word| {
-            let lower = word.trim_matches(|ch: char| !ch.is_alphanumeric()).to_ascii_lowercase();
+            let lower = word
+                .trim_matches(|ch: char| !ch.is_alphanumeric())
+                .to_ascii_lowercase();
             !drop.contains(&lower.as_str()) && lower.len() > 1
         })
         .collect();

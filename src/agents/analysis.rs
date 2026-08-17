@@ -4,7 +4,10 @@ use super::{ExecContext, HandlerResult, PendingMessage, extraction_skeleton, loa
 use crate::error::AgentError;
 use crate::parse::parse_all_documents;
 
-pub async fn algorithm_detector(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn algorithm_detector(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let (verdict, reason) = if doc.ambiguous {
         ("UNCERTAIN", doc.ambiguity_reason.clone())
@@ -13,9 +16,15 @@ pub async fn algorithm_detector(ctx: &ExecContext<'_>, input: &serde_json::Value
     } else if doc.algorithm_present == Some(true)
         || (!doc.pseudocode.is_empty() && !doc.equations.is_empty())
     {
-        ("YES", "source contains an explicit computational procedure".into())
+        (
+            "YES",
+            "source contains an explicit computational procedure".into(),
+        )
     } else if !doc.pseudocode.is_empty() || !doc.equations.is_empty() {
-        ("UNCERTAIN", "partial procedure cues without a clear algorithm label".into())
+        (
+            "UNCERTAIN",
+            "partial procedure cues without a clear algorithm label".into(),
+        )
     } else {
         ("NO", "no reconstructable procedure found".into())
     };
@@ -30,7 +39,10 @@ pub async fn algorithm_detector(ctx: &ExecContext<'_>, input: &serde_json::Value
     ))
 }
 
-pub async fn algorithm_extractor(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn algorithm_extractor(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (origin, doc, _text) = load_doc(ctx, input).await?;
     if doc.algorithm_present == Some(false) {
         return Ok(HandlerResult::complete(
@@ -84,7 +96,10 @@ pub async fn algorithm_extractor(ctx: &ExecContext<'_>, input: &serde_json::Valu
     Ok(result)
 }
 
-pub async fn math_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn math_analyst(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let mut result = HandlerResult::complete(
         "MATH_ANALYSIS",
@@ -112,7 +127,10 @@ pub async fn math_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value) -> R
     Ok(result)
 }
 
-pub async fn code_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn code_analyst(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     Ok(HandlerResult::complete(
         "CODE_ANALYSIS",
@@ -129,7 +147,10 @@ pub async fn code_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value) -> R
     ))
 }
 
-pub async fn complexity_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn complexity_analyst(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     let origin = if doc.complexity_origin.is_empty() {
         "UNKNOWN"
@@ -148,7 +169,10 @@ pub async fn complexity_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value
     ))
 }
 
-pub async fn assumption_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn assumption_analyst(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     Ok(HandlerResult::complete(
         "EXTRACTION",
@@ -157,7 +181,10 @@ pub async fn assumption_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value
     ))
 }
 
-pub async fn failure_mode_analyst(ctx: &ExecContext<'_>, input: &serde_json::Value) -> Result<HandlerResult, AgentError> {
+pub async fn failure_mode_analyst(
+    ctx: &ExecContext<'_>,
+    input: &serde_json::Value,
+) -> Result<HandlerResult, AgentError> {
     let (_origin, doc, _text) = load_doc(ctx, input).await?;
     Ok(HandlerResult::complete(
         "EXTRACTION",
@@ -195,5 +222,9 @@ fn function_names(code: &str) -> Vec<String> {
 }
 
 fn empty_unknown(value: &str) -> &str {
-    if value.trim().is_empty() { "UNKNOWN" } else { value }
+    if value.trim().is_empty() {
+        "UNKNOWN"
+    } else {
+        value
+    }
 }

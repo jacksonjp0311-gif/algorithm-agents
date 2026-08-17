@@ -5,24 +5,32 @@ use crate::permissions::Permissions;
 
 pub fn resolve_local(root: &Path, locator: &str) -> Result<(String, String), AgentError> {
     if let Some(rest) = locator.strip_prefix("fixture://") {
-        let path = root.join("fixtures").join(rest);
+        let path = contained_path(&root.join("fixtures"), Path::new(rest))?;
         let text = std::fs::read_to_string(&path).map_err(|error| {
             AgentError::NotFound(format!("fixture `{}`: {error}", path.display()))
         })?;
         return Ok((path.to_string_lossy().into_owned(), text));
     }
     if let Some(rest) = locator.strip_prefix("sources://") {
-        let path = root.join("sources").join(rest);
+        let path = contained_path(&root.join("sources"), Path::new(rest))?;
         let text = std::fs::read_to_string(&path).map_err(|error| {
             AgentError::NotFound(format!("source `{}`: {error}", path.display()))
         })?;
         return Ok((path.to_string_lossy().into_owned(), text));
     }
     if let Some(rest) = locator.strip_prefix("file://") {
-        let path = PathBuf::from(rest);
-        let text = std::fs::read_to_string(&path).map_err(|error| {
-            AgentError::NotFound(format!("file `{}`: {error}", path.display()))
-        })?;
+        let requested = PathBuf::from(rest);
+        let path = [root.join("sources"), root.join("fixtures")]
+            .iter()
+            .find_map(|base| contained_path(base, &requested).ok())
+            .ok_or_else(|| {
+                AgentError::Denied(
+                    "file:// access is restricted to the configured sources and fixtures roots"
+                        .into(),
+                )
+            })?;
+        let text = std::fs::read_to_string(&path)
+            .map_err(|error| AgentError::NotFound(format!("file `{}`: {error}", path.display())))?;
         return Ok((path.to_string_lossy().into_owned(), text));
     }
     Err(AgentError::Denied(
@@ -30,12 +38,38 @@ pub fn resolve_local(root: &Path, locator: &str) -> Result<(String, String), Age
     ))
 }
 
+fn contained_path(base: &Path, requested: &Path) -> Result<PathBuf, AgentError> {
+    let base = std::fs::canonicalize(base).map_err(|error| {
+        AgentError::NotFound(format!("source root `{}`: {error}", base.display()))
+    })?;
+    let joined = if requested.is_absolute() {
+        requested.to_path_buf()
+    } else {
+        base.join(requested)
+    };
+    let resolved = std::fs::canonicalize(&joined)
+        .map_err(|error| AgentError::NotFound(format!("source `{}`: {error}", joined.display())))?;
+    if !resolved.starts_with(&base) {
+        return Err(AgentError::Denied(format!(
+            "source path escapes configured root `{}`",
+            base.display()
+        )));
+    }
+    if !resolved.is_file() {
+        return Err(AgentError::Denied(
+            "source locator must resolve to a file".into(),
+        ));
+    }
+    Ok(resolved)
+}
+
 pub fn resolve_source(root: &Path, locator: &str) -> Result<(String, String), AgentError> {
     resolve_local(root, locator)
 }
 
 pub fn live_fetch_blocked(permissions: &Permissions, url: &str) -> Option<String> {
-    if url.starts_with("fixture://") || url.starts_with("sources://") || url.starts_with("file://") {
+    if url.starts_with("fixture://") || url.starts_with("sources://") || url.starts_with("file://")
+    {
         return None;
     }
     if !permissions.live_fetch_enabled {
@@ -113,6 +147,10 @@ fn visit(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), AgentError> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
+        let metadata = std::fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
         if path.is_dir() {
             visit(&path, out)?;
         } else if matches!(
@@ -220,11 +258,7 @@ fn atom_to_labeled(xml: &str, locator: &str) -> String {
         .skip(1)
         .filter_map(|chunk| {
             let name = xml_tag(chunk, "name");
-            if name.is_empty() {
-                None
-            } else {
-                Some(name)
-            }
+            if name.is_empty() { None } else { Some(name) }
         })
         .collect();
     let abs = arxiv_id(locator)
@@ -243,7 +277,11 @@ fn atom_to_labeled(xml: &str, locator: &str) -> String {
     };
     format!(
         "TITLE: {title}\nAUTHORS:\n{}\nYEAR: {year}\nTYPE: paper\nURL: {abs}\nDOMAIN: Computational Science\nABSTRACT: {summary}\nALGORITHM: {algorithm}\nAMBIGUOUS: {}\n",
-        authors.iter().map(|name| format!("- {name}")).collect::<Vec<_>>().join("\n"),
+        authors
+            .iter()
+            .map(|name| format!("- {name}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
         if algorithm == "yes" { "no" } else { "yes" }
     )
 }
@@ -272,14 +310,12 @@ fn wikipedia_json_to_labeled(raw: &str, locator: &str) -> String {
         .map(|name| format!("https://en.wikipedia.org/wiki/{}", name.replace(' ', "_")))
         .unwrap_or_else(|| locator.to_owned());
     let hay = format!("{title} {extract}").to_ascii_lowercase();
-    let algorithm = if hay.contains("algorithm")
-        || hay.contains("procedure")
-        || hay.contains("monte carlo")
-    {
-        "yes"
-    } else {
-        "uncertain"
-    };
+    let algorithm =
+        if hay.contains("algorithm") || hay.contains("procedure") || hay.contains("monte carlo") {
+            "yes"
+        } else {
+            "uncertain"
+        };
     format!(
         "TITLE: {title}\nTYPE: encyclopedia\nURL: {url}\nABSTRACT: {extract}\nALGORITHM: {algorithm}\nAMBIGUOUS: {}\n",
         if algorithm == "yes" { "no" } else { "yes" }

@@ -1,3 +1,23 @@
 {
-  "type": "object"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alchetron Session Receipt",
+  "type": "object",
+  "required": ["receipt_id", "session_id", "state", "directive", "supervisor", "agent_runs", "artifacts", "canonical_publications"],
+  "properties": {
+    "receipt_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "state": { "type": "string" },
+    "directive": { "type": "string" },
+    "supervisor": { "type": "string" },
+    "sources_used": { "type": "integer" },
+    "candidates_used": { "type": "integer" },
+    "agent_runs": { "type": "integer" },
+    "failures": { "type": "integer" },
+    "low_confidence": { "type": "integer" },
+    "needs_human": { "type": "integer" },
+    "messages": { "type": "integer" },
+    "artifacts": { "type": "integer" },
+    "canonical_publications": { "type": "integer" },
+    "agent_versions": { "type": "array", "items": { "type": "string" } }
+  }
 }

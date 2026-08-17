@@ -86,7 +86,10 @@ pub async fn execute(ctx: &ExecContext<'_>, input: &Value) -> Result<HandlerResu
     }
 }
 
-pub async fn load_doc(ctx: &ExecContext<'_>, input: &Value) -> Result<(String, SourceDoc, String), AgentError> {
+pub async fn load_doc(
+    ctx: &ExecContext<'_>,
+    input: &Value,
+) -> Result<(String, SourceDoc, String), AgentError> {
     if let Some(text) = input.get("source_text").and_then(|v| v.as_str()) {
         return Ok((String::new(), parse_source_document(text), text.to_owned()));
     }
@@ -174,5 +177,9 @@ pub fn extraction_skeleton(doc: &SourceDoc) -> Value {
 }
 
 fn empty_unknown(value: &str) -> &str {
-    if value.trim().is_empty() { "UNKNOWN" } else { value }
+    if value.trim().is_empty() {
+        "UNKNOWN"
+    } else {
+        value
+    }
 }

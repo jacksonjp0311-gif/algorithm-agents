@@ -406,6 +406,27 @@
       "args": {
         "type": "object"
       }
+    },
+    {
+      "id": "propose_relationship",
+      "description": "Submit a private evidence-backed graph relationship proposal",
+      "session_required": true,
+      "args": {
+        "type": "object",
+        "required": ["session_id", "from_node", "to_node", "relation", "evidence", "proposed_by"]
+      }
+    },
+    {
+      "id": "list_relationship_proposals",
+      "description": "List private relationship proposals for human review",
+      "session_required": false,
+      "args": { "type": "object" }
+    },
+    {
+      "id": "get_canonical_graph",
+      "description": "Read canonical knowledge graph nodes and edges",
+      "session_required": false,
+      "args": { "type": "object" }
     }
   ]
 }
